@@ -17,7 +17,10 @@
 
 #include <sensor_msgs/JointState.h>
 
+#include <diagnostic_msgs/DiagnosticArray.h>
+
 #include "naoqi_dcm_driver/robot.hpp"
+#include "naoqi_dcm_driver/tools.hpp"
 
 QI_REGISTER_OBJECT( Robot,
                     isConnected,
@@ -30,12 +33,13 @@ Robot::Robot(qi::SessionPtr session):
                is_connected_(false),
                nhPtr_(new ros::NodeHandle("")),
                body_type_(""),
-               topic_queue_(50),
+               topic_queue_(10),
                prefix_("naoqi_dcm"),
-               high_freq_(100.0),
+               high_freq_(50.0),
                controller_freq_(15.0),
                joint_precision_(0.1),
-               odom_frame_("odom")
+               odom_frame_("odom"),
+               temperature_error_(70.0f)
 {
 }
 
@@ -79,21 +83,20 @@ void Robot::stopService() {
   }
 }
 
-bool Robot::initialize(std::vector<std::string> *joints)
+bool Robot::initialize()
 {
-  //set alias for joints positions and temperatures
-  for(std::vector<std::string>::iterator it=joints->begin(); it!=joints->end(); ++it)
+  //set alias for Memory keys to check
+  for(std::vector<std::string>::iterator it=joints_names_.begin(); it!=joints_names_.end(); ++it)
   {
     //ignore mimic joints
     if( (it->find("Wheel") != std::string::npos)
          || (*it=="RHand" || *it=="LHand" || *it == "RWristYaw" || *it == "LWristYaw") && (body_type_ == "H21"))
     {
-      joints->erase(it);
+      joints_names_.erase(it);
       it--;
       continue;
     }
-    joints_names_.push_back("Device/SubDeviceList/" + *it + "/Position/Sensor/Value");
-    joints_tempr_.push_back("Diagnosis/Temperature/" + *it + "/Error");
+    keys_positions_.push_back("Device/SubDeviceList/" + *it + "/Position/Sensor/Value");
   }
 
   //keet the number of active joints
@@ -124,7 +127,7 @@ bool Robot::initialize(std::vector<std::string> *joints)
   commandAlias_j_keys.resize(joints_nbr);
   for(int i=0; i<joints_nbr; ++i)
   {
-    std::string key = "Device/SubDeviceList/" + joints->at(i) + "/Position/Actuator/Value";
+    std::string key = "Device/SubDeviceList/" + joints_names_.at(i) + "/Position/Actuator/Value";
     commandAlias_j_keys[i] = qi::AnyValue(qi::AnyReference::from(key), false, false);
   }
   // then, set the alias
@@ -149,11 +152,11 @@ bool Robot::initialize(std::vector<std::string> *joints)
   std::vector <qi::AnyValue> commandAlias_h_keys;
   for(int i=0; i<joints_nbr; ++i)
   {
-    if((joints->at(i) == "RHipYawPitch") //for mimic joints: Nao only
-        || (joints->at(i).find("Wheel") != std::string::npos))
+    if((joints_names_.at(i) == "RHipYawPitch") //for mimic joints: Nao only
+        || (joints_names_.at(i).find("Wheel") != std::string::npos))
       continue;
 
-    std::string key = "Device/SubDeviceList/" + joints->at(i) + "/Hardness/Actuator/Value";
+    std::string key = "Device/SubDeviceList/" + joints_names_.at(i) + "/Hardness/Actuator/Value";
     commandAlias_h_keys.push_back(qi::AnyValue(qi::AnyReference::from(key), false, false));
   }
   // then, set the alias
@@ -181,14 +184,14 @@ bool Robot::initialize(std::vector<std::string> *joints)
   return true;
 }
 
-bool Robot::initializeControllers(controller_manager::ControllerManager& cm, std::vector<std::string> *joints)
+bool Robot::initializeControllers()
 {
-  if(!initialize(joints))
+  if(!initialize())
   {
     ROS_ERROR("Initialization method failed!");
     return false;
   }
-  int joints_nbr = joints->size();
+  int joints_nbr = joints_names_.size();
 
   // Initialize Controllers' Interfaces
   joint_angles_.reserve(joints_nbr);
@@ -205,11 +208,11 @@ bool Robot::initializeControllers(controller_manager::ControllerManager& cm, std
   {
     for(int i=0; i<joints_nbr; ++i)
     {
-      hardware_interface::JointStateHandle state_handle(joints->at(i), &joint_angles_[i],
+      hardware_interface::JointStateHandle state_handle(joints_names_.at(i), &joint_angles_[i],
                                                         &joint_velocities_[i], &joint_efforts_[i]);
       jnt_state_interface_.registerHandle(state_handle);
 
-      hardware_interface::JointHandle pos_handle(jnt_state_interface_.getHandle(joints->at(i)),
+      hardware_interface::JointHandle pos_handle(jnt_state_interface_.getHandle(joints_names_.at(i)),
                                                  &joint_commands_[i]);
       jnt_pos_interface_.registerHandle(pos_handle);
     }
@@ -227,7 +230,7 @@ bool Robot::initializeControllers(controller_manager::ControllerManager& cm, std
 }
 
 
-// ENTRY POINT FROM OUTSIDE
+// The entry point from outside
 bool Robot::connect()
 {
   is_connected_ = false;
@@ -250,10 +253,28 @@ bool Robot::connect()
   try
   {
     memory_proxy_ = _session->service("ALMemory");
+
+    //get the robot name
+    robot_ = memory_proxy_.call<std::string>("getData", "RobotConfig/Body/Type" );
+    std::transform(robot_.begin(), robot_.end(), robot_.begin(), ::tolower);
   }
   catch (const std::exception& e)
   {
     ROS_ERROR("Failed to connect to Memory Proxy!\n\tTrace: %s", e.what());
+    return false;
+  }
+
+  // Allow for temperature reporting (for CPU)
+  try
+  {
+    if ((robot_ == "pepper") || (robot_ == "nao")) {
+      qi::AnyObject body_temperature_ = _session->service("ALBodyTemperature");
+      body_temperature_.call<void>("setEnableNotifications", true);
+    }
+  }
+  catch (const std::exception& e)
+  {
+    ROS_ERROR("Failed to connect to ALBodyTemperature!\n\tTrace: %s", e.what());
     return false;
   }
 
@@ -269,7 +290,6 @@ bool Robot::connect()
   }
 
   // Initialize joints to control
-  std::vector <std::string> joints;
   try
   {
     //going to rest
@@ -289,20 +309,42 @@ bool Robot::connect()
         }
     }
 
-    //reading joints names
-    for (std::vector<std::string>::const_iterator it=motor_groups_.begin(); it!=motor_groups_.end(); ++it)
+    //reading joints names that will be controlled
+    try
     {
-      std::vector <std::string> joint_names_g = motion_proxy_.call<std::vector <std::string> >("getBodyNames", *it);
-      joints.insert(joints.end(), joint_names_g.begin(), joint_names_g.end());
+      for (std::vector<std::string>::const_iterator it=motor_groups_.begin(); it!=motor_groups_.end(); ++it)
+      {
+        std::vector <std::string> joint_names_g =
+            motion_proxy_.call<std::vector <std::string> >("getBodyNames", *it);
+        joints_names_.insert(joints_names_.end(), joint_names_g.begin(), joint_names_g.end());
+      }
+    }
+    catch (const std::exception& e)
+    {
+      ROS_ERROR("Failed to getBodyNames!\n\tTrace: %s", e.what());
     }
     std::stringstream ss;
-    std::copy(joints.begin(), joints.end()-1, std::ostream_iterator<std::string>(ss,", "));
-    std::copy(joints.end()-1, joints.end(), std::ostream_iterator<std::string>(ss));
+    std::copy(joints_names_.begin(), joints_names_.end()-1, std::ostream_iterator<std::string>(ss,", "));
+    std::copy(joints_names_.end()-1, joints_names_.end(), std::ostream_iterator<std::string>(ss));
     ROS_INFO("Robot's joints that will be controlled are: %s",ss.str().c_str());
 
     //joint_states topic initialization
-    joint_states_topic_.name = motion_proxy_.call<std::vector <std::string> >("getBodyNames", "Body");
+    joint_states_topic_.name =
+        motion_proxy_.call<std::vector <std::string> >("getBodyNames", "Body");
     joint_states_topic_.position.resize(joint_states_topic_.name.size());
+
+    //initializing the Diagnostics
+    try
+    {
+      std::vector<std::string> joints_all_names =
+          motion_proxy_.call<std::vector<std::string> >("getBodyNames", "JointActuators");
+      diagPtr_ = boost::shared_ptr<Diagnostics>(
+            new Diagnostics(_session, &diag_pub_, joints_all_names, temperature_error_));
+    }
+    catch (const std::exception& e)
+    {
+      ROS_ERROR("Failed to getBodyNames!\n\tTrace: %s", e.what());
+    }
   }
   catch (const std::exception& e)
   {
@@ -317,7 +359,7 @@ bool Robot::connect()
 
   // Initialize Controller Manager and Controllers
   manager_ = new controller_manager::ControllerManager( this, *nhPtr_);
-  if(!initializeControllers(*manager_, &joints))
+  if(!initializeControllers())
   {
     ROS_ERROR("Could not load controllers!");
     return false;
@@ -349,10 +391,12 @@ void Robot::subscribe()
   // Subscribe/Publish ROS Topics/Services
   cmd_vel_sub_ = nhPtr_->subscribe(prefix_+"cmd_vel", topic_queue_, &Robot::commandVelocity, this);
 
+  diag_pub_ = nhPtr_->advertise<diagnostic_msgs::DiagnosticArray>(prefix_+"diagnostics", topic_queue_);
+
   stiffness_pub_ = nhPtr_->advertise<std_msgs::Float32>(prefix_+"stiffnesses", topic_queue_);
   stiffness_.data = 1.0f;
 
-  joint_states_pub_ = nhPtr_->advertise<sensor_msgs::JointState>("joint_states",5);
+  joint_states_pub_ = nhPtr_->advertise<sensor_msgs::JointState>(prefix_+"joint_states", topic_queue_);
 }
 
 void Robot::loadParams()
@@ -560,80 +604,31 @@ void Robot::publishBaseFootprint(const ros::Time &ts)
                                                                  base_link_frame, "base_footprint"));
 }
 
-std::vector<float> fromAnyValueToFloatVector(qi::AnyValue& value, std::vector<float>& result){
-  qi::AnyReferenceVector anyrefs = value.asListValuePtr();
-
-  for(int i=0; i<anyrefs.size(); ++i)
-  {
-    try
-    {
-      result.push_back(anyrefs[i].content().toFloat());
-    }
-    catch(std::runtime_error& e)
-    {
-      result.push_back(-1.0);
-      std::cout << e.what() << "=> set to -1" << std::endl;
-    }
-  }
-  return result;
-}
-
-std::vector<int> fromAnyValueToIntVector(qi::AnyValue& value, std::vector<int>& result){
-  qi::AnyReferenceVector anyrefs = value.asListValuePtr();
-
-  for(int i=0; i<anyrefs.size();i++)
-  {
-    try
-    {
-      result.push_back(anyrefs[i].content().toInt());
-    }
-    catch(std::runtime_error& e)
-    {
-      result.push_back(-1.0);
-      std::cout << e.what() << "=> set to -1" << std::endl;
-    }
-  }
-  return result;
-}
-
 void Robot::readJoints()
 {
-  qi::AnyValue joints_now_qi;
+  //get joints positions
+  std::vector<float> joint_positions;
   try
   {
-    joints_now_qi = memory_proxy_.call<qi::AnyValue>("getListData", joints_names_);
+    qi::AnyValue keys_positions_qi = memory_proxy_.call<qi::AnyValue>("getListData", keys_positions_);
+    fromAnyValueToFloatVector(keys_positions_qi, joint_positions);
   }
   catch(const std::exception& e)
   {
     ROS_ERROR("Could not get joint data from the robot \n\tTrace: %s", e.what());
     return;
   }
-  std::vector<float> joints_now;
-  fromAnyValueToFloatVector(joints_now_qi, joints_now);
 
-  try
+  if (!diagPtr_->publish())
   {
-    qi::AnyValue tempr_err_qi = memory_proxy_.call<qi::AnyValue>("getListData", joints_tempr_);
-    std::vector<int> tempr_err;
-    fromAnyValueToIntVector(tempr_err_qi, tempr_err);
-    std::vector<std::string>::const_iterator it_joints_ = joints_tempr_.begin();
-    for(std::vector<int>::const_iterator it = tempr_err.begin(); it != tempr_err.end(); ++it, ++it_joints_) 
-      if (*it == 1)
-      {
-        setStiffness(0.0f);
-        ROS_INFO_STREAM("HIGH TEMPERATURE DETECTED in " << *it_joints_);
-        stopService();
-      }
-  }
-  catch(const std::exception& e)
-  {
-    ROS_ERROR("Could not get joint data from the robot \n\tTrace: %s", e.what());
-    return;
+    setStiffness(0.0f);
+    ROS_INFO_STREAM("HIGH JOINT TEMPERATURE IS DETECTED ");
+    stopService();
   }
 
   std::vector <double>::iterator it_comm = joint_commands_.begin();
   std::vector <double>::iterator it_cur = joint_angles_.begin();
-  std::vector <float>::iterator it_mem = joints_now.begin();
+  std::vector <float>::iterator it_mem = joint_positions.begin();
   for(; it_comm<joint_commands_.end(); ++it_comm, ++it_cur, ++it_mem)
   {
     *it_cur = *it_mem;
@@ -644,7 +639,7 @@ void Robot::readJoints()
 
 void Robot::publishJointStateFromAlMotion(){
   std::vector<double> positionData;
-  positionData = motion_proxy_.call< std::vector<double> >("getAngles", "Body", 1);
+  positionData = motion_proxy_.call<std::vector <double> >("getAngles", "Body", 1);
   joint_states_topic_.header.stamp = ros::Time::now();
   joint_states_topic_.header.frame_id = "base_link";
   for(int i = 0; i<positionData.size(); ++i)

@@ -16,6 +16,8 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   naoqi_libqi
   naoqi_libqicore
+  diagnostic_msgs
+  diagnostic_updater
 )
 
 find_package(Boost REQUIRED)
@@ -38,6 +40,8 @@ add_executable(${projectName}
   include/naoqi_dcm_driver/robot.hpp
   src/tools.cpp
   include/naoqi_dcm_driver/tools.hpp
+  src/diagnostics.cpp
+  include/naoqi_dcm_driver/diagnostics.hpp
 )
 
 target_link_libraries(${projectName}

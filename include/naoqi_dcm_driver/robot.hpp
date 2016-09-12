@@ -29,7 +29,8 @@
 
 #include <controller_manager/controller_manager.h>
 
-// Helper definition
+#include "naoqi_dcm_driver/diagnostics.hpp"
+
 template<typename T, size_t N>
 T * end(T (&ra)[N]) {
     return ra + N;
@@ -60,10 +61,10 @@ public:
   void disconnect();
 
   //! @brief initialization procedure
-  bool initialize(std::vector<std::string> *joints);
+  bool initialize();
 
   //! @brief initialization of controllers
-  bool initializeControllers(controller_manager::ControllerManager& cm, std::vector<std::string> *joints);
+  bool initializeControllers();
 
   //! @brief defining Subscribe/Advertise to ROS Topics/Services
   void subscribe();
@@ -112,102 +113,116 @@ public:
   void run();
 
 private:
-  // node handle
+  /** node handle pointer*/
   boost::scoped_ptr <ros::NodeHandle> nhPtr_;
 
-  // velocity publisher
+  boost::shared_ptr <Diagnostics> diagPtr_;
+
+  /** velocity publisher */
   ros::Subscriber cmd_vel_sub_;
 
-  // base_footprint broadcaster
+  /** base_footprint broadcaster */
   tf::TransformBroadcaster base_footprint_broadcaster_;
 
-  // base_footprint listener
+  /** base_footprint listener */
   tf::TransformListener base_footprint_listener_;
 
-  // stiffness publisher
+  /** stiffness publisher */
   ros::Publisher stiffness_pub_;
 
-  // stiffness data
+  /** diagnostics publisher */
+  ros::Publisher diag_pub_;
+
+  /** stiffness data */
   std_msgs::Float32 stiffness_;
 
-  // joint states publisher
+  /** joint states publisher */
   ros::Publisher joint_states_pub_;
 
-  // joint states data
+  /** joint states data */
   sensor_msgs::JointState joint_states_topic_;
 
-  // controller manager
+  /** controller manager */
   controller_manager::ControllerManager* manager_;
 
-  // aliases to send DCM commands
+  /** aliases to send DCM commands */
   std::vector <qi::AnyValue> commands_;
   std::vector <std::vector <std::vector <qi::AnyValue> > > commands_values_;
 
-  // service name
+  /** service name */
   std::string session_name_;
 
-  // is session connected
+  /** is session connected */
   bool is_connected_;
 
-  // robot body type
+  /** robot body type */
   std::string body_type_;
 
-  //prefix for published topics
+  /** prefix for published topics */
   std::string prefix_;
 
-  //odom frame name
+  /** odom frame name */
   std::string odom_frame_;
 
+  /** stiffness status */
   bool stiffnesses_enabled_;
+
+  /** message buffer */
   int topic_queue_;
 
-  // frequency to read joints values
+  /** frequency to read joints values */
   double high_freq_;
 
-  // frequency to write joints values
+  /** frequency to write joints values */
   double controller_freq_;
 
-  // threshold to update joints to desired values
+  /** threshold to update joints to desired values */
   double joint_precision_;
 
-  // session pointer
+  /** Naoqi session pointer */
   qi::SessionPtr _session;
 
-  // Memory proxy
+  /** Memory proxy */
   qi::AnyObject memory_proxy_;
 
-  // DCM proxy
+  /** DCM proxy */
   qi::AnyObject dcm_proxy_;
 
-  // Motion proxy
+  /** Motion proxy */
   qi::AnyObject motion_proxy_;
 
-  // motor groups used to control
+  /** motor groups used to control */
   std::vector <std::string> motor_groups_;
 
-  // joints positions aliases
-  std::vector <std::string> joints_names_;
+  /** joints positions keys to read */
+  std::vector <std::string> keys_positions_;
 
-  // motors temperatures alias
-  std::vector <std::string> joints_tempr_;
-
-  // joints states from ROS hardware interface
+  /** joints states from ROS hardware interface */
   hardware_interface::JointStateInterface jnt_state_interface_;
 
-  // joints positions from ROS hardware interface
+  /** joints positions from ROS hardware interface */
   hardware_interface::PositionJointInterface jnt_pos_interface_;
 
-  //joints angles to apply
+  /** joints names */
+  std::vector <std::string> joints_names_;
+
+  /** joints angles to apply */
   std::vector <double> joint_commands_;
 
-  //current joints angles
+  /** current joints angles */
   std::vector <double> joint_angles_;
 
-  // joints velocities from ROS hardware interface
+  /** joints velocities from ROS hardware interface */
   std::vector <double> joint_velocities_;
 
-  // joints efforts from ROS hardware interface
+  /** joints efforts from ROS hardware interface */
   std::vector <double> joint_efforts_;
+
+  /** the robot name */
+  std::string robot_;
+
+  /** maximum temperature */
+  float temperature_error_;
 };
 
 #endif // NAOQI_DCM_DRIVER_H
