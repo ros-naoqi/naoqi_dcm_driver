@@ -35,6 +35,9 @@ include_directories(include
 add_executable(${projectName} 
   src/robot_driver.cpp 
   src/robot.cpp
+  include/naoqi_dcm_driver/robot.hpp
+  src/tools.cpp
+  include/naoqi_dcm_driver/tools.hpp
 )
 
 target_link_libraries(${projectName}
