@@ -510,7 +510,12 @@ bool Robot::isConnected()
 
 void Robot::commandVelocity(const geometry_msgs::TwistConstPtr &msg)
 {
-  ROS_WARN("This function does nothing at the moment..");
+  // no need to check for max velocity since motion clamps the velocities internally
+  const float& vel_x = msg->linear.x;
+  const float& vel_y = msg->linear.y;
+  const float& vel_th = msg->angular.z;
+  std::cout << "going to move x: " << vel_x << " y: " << vel_y << " th: " << vel_th << std::endl;
+  motion_proxy_.async<void>("move", vel_x, vel_y, vel_th);
 }
 
 void Robot::publishBaseFootprint(const ros::Time &ts)
