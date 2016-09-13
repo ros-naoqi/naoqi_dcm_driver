@@ -1,7 +1,8 @@
 NAOqi DCM Driver
 ================
 
-The hardware interface to connect to Nao, Romeo, and Pepper robots. 
+The hardware interface to connect to Nao, Romeo, and Pepper robots. This is the new version of `nao_dcm_driver <https://github.com/ros-aldebaran/nao_dcm_robot/tree/master/nao_dcm_driver>`_ that is now common for all robots.
+When using this package with Pepper, in some cases Pepper can shake its arms, this happens because of the concurrence between DCM and Motion. Please be careful and use the package at your own risks.
 
 What it does
 ============
