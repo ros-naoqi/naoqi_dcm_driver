@@ -105,6 +105,18 @@ int main(int argc, char** argv)
 
   // Deal with ALBrokerManager singleton (add your broker into NAOqi)
   boost::shared_ptr<Robot> robot = boost::make_shared<Robot>(session);
+
+  // stop ALTouch service to prevent the robot shaking
+  try
+  {
+    qi::AnyObject touch_proxy = session->service("ALTouch");
+    touch_proxy.call<void>("exit");
+  }
+  catch (const std::exception& e)
+  {
+    ROS_INFO("Failed to connect ALTouch \n\tTrace: %s", e.what());
+  }
+
   session->registerService("naoqi_dcm_driver", robot);
   ros::Duration(0.2).sleep();
 
