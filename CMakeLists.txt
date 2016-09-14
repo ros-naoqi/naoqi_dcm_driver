@@ -42,6 +42,8 @@ add_executable(${projectName}
   include/naoqi_dcm_driver/tools.hpp
   src/diagnostics.cpp
   include/naoqi_dcm_driver/diagnostics.hpp
+  src/memory.cpp
+  include/naoqi_dcm_driver/memory.hpp
 )
 
 target_link_libraries(${projectName}
