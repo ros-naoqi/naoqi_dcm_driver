@@ -111,10 +111,23 @@ int main(int argc, char** argv)
   {
     qi::AnyObject touch_proxy = session->service("ALTouch");
     touch_proxy.call<void>("exit");
+    ROS_INFO_STREAM("Naoqi Touch service is shut down");
   }
   catch (const std::exception& e)
   {
-    ROS_INFO("Failed to connect ALTouch \n\tTrace: %s", e.what());
+    ROS_INFO("Did not stop ALTouch: %s", e.what());
+  }
+
+  // stop AutonomousLife service to prevent the robot shaking
+  try
+  {
+    qi::AnyObject life_proxy = session->service("ALAutonomousLife");
+    life_proxy.call<void>("exit");
+    ROS_INFO_STREAM("Naoqi AutonomousLife service is shut down");
+  }
+  catch (const std::exception& e)
+  {
+    ROS_INFO("Did not stop AutonomousLife: %s", e.what());
   }
 
   session->registerService("naoqi_dcm_driver", robot);

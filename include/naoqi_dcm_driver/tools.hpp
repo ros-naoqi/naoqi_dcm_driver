@@ -4,8 +4,14 @@
 // NAOqi Headers
 #include <qi/anyvalue.hpp>
 
-std::vector<float> fromAnyValueToFloatVector(qi::AnyValue& value, std::vector<float>& result);
+qi::AnyValue fromStringVectorToAnyValue(const std::vector<std::string> &vector);
 
-std::vector<int> fromAnyValueToIntVector(qi::AnyValue& value, std::vector<int>& result);
+qi::AnyValue fromDoubleVectorToAnyValue(const std::vector<double> &vector);
+
+std::vector<float> fromAnyValueToFloatVector(qi::AnyValue& value);
+
+std::vector<int> fromAnyValueToIntVector(qi::AnyValue& value);
+
+std::string print(const std::vector <std::string> &vector);
 
 #endif // TOOLS_HPP

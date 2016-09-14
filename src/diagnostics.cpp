@@ -23,11 +23,11 @@
 Diagnostics::Diagnostics(const qi::SessionPtr& session,
                          ros::Publisher *pub,
                          const std::vector<std::string> &joints_all_names,
-                         float temperature_error_level):
+                         const std::string &robot):
     pub_(pub),
     joints_all_names_(joints_all_names),
     temperature_warn_level_(68.0f),
-    temperature_error_level_(temperature_error_level)
+    temperature_error_level_(70.0f)
 {
   //set the default status
   status_.name = std::string("naoqi_dcm_driver_joints:Status");
@@ -42,14 +42,28 @@ Diagnostics::Diagnostics(const qi::SessionPtr& session,
   }
   catch (const std::exception& e)
   {
-    ROS_ERROR("Failed to connect to Memory Proxy!\n\tTrace: %s", e.what());
+    ROS_ERROR("DIAGNOSTICS: Failed to connect to Memory Proxy!\n\tTrace: %s", e.what());
   }
 
+  //set the keys to check
   std::vector<std::string>::const_iterator it = joints_all_names_.begin();
   for(; it != joints_all_names_.end(); ++it) {
     keys_tocheck_.push_back("Device/SubDeviceList/" + *it + "/Temperature/Sensor/Value");
     keys_tocheck_.push_back("Device/SubDeviceList/" + *it + "/Hardness/Actuator/Value");
     keys_tocheck_.push_back("Device/SubDeviceList/" + *it + "/ElectricCurrent/Sensor/Value");
+  }
+
+  //allow the temperature reporting (for CPU)
+  try
+  {
+    if ((robot == "pepper") || (robot == "juliette") || (robot == "nao")) {
+      qi::AnyObject body_temperature_ = session->service("ALBodyTemperature");
+      body_temperature_.call<void>("setEnableNotifications", true);
+    }
+  }
+  catch (const std::exception& e)
+  {
+    ROS_WARN("DIAGNOSTICS: Failed to connect to ALBodyTemperature!\n\tTrace: %s", e.what());
   }
 }
 
@@ -95,11 +109,11 @@ bool Diagnostics::publish()
   try
   {
     qi::AnyValue keys_tocheck_qi = memory_proxy_.call<qi::AnyValue>("getListData", keys_tocheck_);
-    fromAnyValueToFloatVector(keys_tocheck_qi, values);
+    values = fromAnyValueToFloatVector(keys_tocheck_qi);
   }
   catch(const std::exception& e)
   {
-    ROS_ERROR("Could not get joint data from the robot \n\tTrace: %s", e.what());
+    ROS_ERROR("DIAGNOSTICS: Could not get joint data from the robot \n\tTrace: %s", e.what());
     return false;
   }
 
@@ -174,7 +188,10 @@ bool Diagnostics::publish()
   pub_->publish(msg);
 
   if(status_.level >= (int) diagnostic_msgs::DiagnosticStatus::ERROR)
+  {
+    ROS_ERROR_STREAM("DIAGNOSTICS: ERROR DETECTED: " << getStatusMsg());
     return false;
+  }
   else
     return true;
 }

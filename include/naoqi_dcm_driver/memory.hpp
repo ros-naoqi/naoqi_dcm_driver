@@ -5,12 +5,21 @@
 #include <qi/session.hpp>
 
 /**
- * @brief This class is a wapper for Naoqi Memory Proxy
+ * @brief This class is a wapper for Naoqi Memory Class
  */
 class Memory
 {
 public:
   Memory(const qi::SessionPtr& session);
+
+  //! @brief initialize with joints names to control
+  void init(const std::vector <std::string> &joints_names);
+
+  //! @brief initialize memory keys to read
+  std::vector <std::string> initMemoryKeys(const std::vector <std::string> &joints);
+
+  //! @brief Get values of keys
+  std::vector<float> getListData();
 
   //! @brief Get values associated with the given list of keys
   std::vector<float> getListData(const std::vector <std::string> &keys);
@@ -31,6 +40,9 @@ public:
 private:
   /** Memory proxy */
   qi::AnyObject memory_proxy_;
+
+  /** joints positions keys to read */
+  std::vector <std::string> keys_positions_;
 };
 
 #endif // MEMORY_HPP

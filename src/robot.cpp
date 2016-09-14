@@ -39,41 +39,31 @@ Robot::Robot(qi::SessionPtr session):
                controller_freq_(15.0),
                joint_precision_(0.1),
                odom_frame_("odom"),
-               temperature_error_(70.0f)
+               use_dcm_(false),
+               use_cmd_vel_(false)
 {
 }
 
 Robot::~Robot()
 {
-  ROS_INFO_STREAM(session_name_ << " service is shutting down.");
   stopService();
 }
 
 void Robot::stopService() {
-  ROS_INFO_STREAM("Stopping the service...");
+  ROS_INFO_STREAM(session_name_ << " stopping the service...");
+
+  //reset stiffness for arms if using DCM to prevent its concurrence with ALMotion
+  if(use_dcm_)
+    motion_->setStiffnessArms(0.0f, 1.0f);
 
   //going to rest
-  //set stiffness after wakeUp the robot
-  try
-  {
-    motion_proxy_.call<void>("stiffnessInterpolation", "LArm", 0.0f, 1.0f);
-    motion_proxy_.call<void>("stiffnessInterpolation", "RArm", 0.0f, 1.0f);
-  }
-  catch (const std::exception &e)
-  {
-    ROS_ERROR("Could not WakeUp the robot : %s", e.what());
-  }
   if (motor_groups_.size() == 1)
     if (motor_groups_[0] == "Body")
-      if (motion_proxy_.call<bool>("robotIsWakeUp"))
-      {
-        motion_proxy_.call<void>("rest");
-        ROS_INFO_STREAM("Going to rest ...");
-        sleep(4);
-      }
+      motion_->rest();
 
-  //reset stiffness
+  //set stiffness for the whole body
   setStiffness(0.0f);
+
   is_connected_ = false;
 
   if(nhPtr_)
@@ -83,115 +73,9 @@ void Robot::stopService() {
   }
 }
 
-bool Robot::initialize()
+bool Robot::initializeControllers(const std::vector <std::string> &joints_names)
 {
-  //set alias for Memory keys to check
-  for(std::vector<std::string>::iterator it=joints_names_.begin(); it!=joints_names_.end(); ++it)
-  {
-    //ignore mimic joints
-    if( (it->find("Wheel") != std::string::npos)
-         || (*it=="RHand" || *it=="LHand" || *it == "RWristYaw" || *it == "LWristYaw") && (body_type_ == "H21"))
-    {
-      joints_names_.erase(it);
-      it--;
-      continue;
-    }
-    keys_positions_.push_back("Device/SubDeviceList/" + *it + "/Position/Sensor/Value");
-  }
-
-  //keet the number of active joints
-  int joints_nbr = joints_names_.size();
-
-  // DCM Motion Commands Initialization
-  // Create the Motion Command
-  // at first, set keys
-  commands_values_.reserve(joints_nbr);
-  commands_values_.resize(joints_nbr);
-  for(int i=0; i<joints_nbr; ++i)
-  {
-    commands_values_[i].resize(1);
-    commands_values_[i][0].resize(3);
-    commands_values_[i][0][2] = qi::AnyValue(qi::AnyReference::from(0), false, false);
-  }
-  // then, set the alias
-  commands_.reserve(4);
-  commands_.resize(4);
-  commands_[0] = qi::AnyValue(qi::AnyReference::from("Joints"), false, false);
-  commands_[1] = qi::AnyValue(qi::AnyReference::from("ClearAll"), false, false);
-  commands_[2] = qi::AnyValue(qi::AnyReference::from("time-mixed"), false, false);
-  commands_[3] = qi::AnyValue(qi::AnyReference::from(commands_values_), false, false);
-
-  // Create the Joints Actuators Alias
-  //at first, set keys
-  std::vector <qi::AnyValue> commandAlias_j_keys;
-  commandAlias_j_keys.resize(joints_nbr);
-  for(int i=0; i<joints_nbr; ++i)
-  {
-    std::string key = "Device/SubDeviceList/" + joints_names_.at(i) + "/Position/Actuator/Value";
-    commandAlias_j_keys[i] = qi::AnyValue(qi::AnyReference::from(key), false, false);
-  }
-  // then, set the alias
-  std::vector <qi::AnyValue> commandAlias_j;
-  commandAlias_j.resize(2);
-  commandAlias_j[0] = qi::AnyValue(qi::AnyReference::from("Joints"), false, false);
-  commandAlias_j[1] = qi::AnyValue(qi::AnyReference::from(commandAlias_j_keys), false, false);
-
-  try
-  {
-    qi::AnyValue commandAlias_qi(qi::AnyReference::from(commandAlias_j), false, false);
-    dcm_proxy_.call<void>("createAlias", commandAlias_qi);
-  }
-  catch(const std::exception& e)
-  {
-    ROS_ERROR("Could not initialize DCM aliases for position actuators !\n\tTrace: %s", e.what());
-    return false;
-  }
-
-  // Create Joints Hardness Alias
-  //at first, set keys
-  std::vector <qi::AnyValue> commandAlias_h_keys;
-  for(int i=0; i<joints_nbr; ++i)
-  {
-    if((joints_names_.at(i) == "RHipYawPitch") //for mimic joints: Nao only
-        || (joints_names_.at(i).find("Wheel") != std::string::npos))
-      continue;
-
-    std::string key = "Device/SubDeviceList/" + joints_names_.at(i) + "/Hardness/Actuator/Value";
-    commandAlias_h_keys.push_back(qi::AnyValue(qi::AnyReference::from(key), false, false));
-  }
-  // then, set the alias
-  std::vector <qi::AnyValue> commandAlias_h;
-  commandAlias_h.reserve(2);
-  commandAlias_h.resize(2);
-  commandAlias_h[0] = qi::AnyValue(qi::AnyReference::from("JointsHardness"), false, false);
-  commandAlias_h[1] = qi::AnyValue(qi::AnyReference::from(commandAlias_h_keys), false, false);
-
-  //call dcm_proxy.createAlias
-  try
-  {
-    qi::AnyValue commandAlias_qi(qi::AnyReference::from(commandAlias_h), false, false);
-    dcm_proxy_.call<void>("createAlias", commandAlias_qi);
-  }
-  catch(const std::exception& e)
-  {
-    ROS_ERROR("Could not initialize DCM aliases for joints hardness!\n\tTrace: %s", e.what());
-    return false;
-  }
-
-  // Turn Stiffness On
-  setStiffness(1.0f);
-
-  return true;
-}
-
-bool Robot::initializeControllers()
-{
-  if(!initialize())
-  {
-    ROS_ERROR("Initialization method failed!");
-    return false;
-  }
-  int joints_nbr = joints_names_.size();
+  int joints_nbr = joints_names.size();
 
   // Initialize Controllers' Interfaces
   joint_angles_.reserve(joints_nbr);
@@ -208,11 +92,11 @@ bool Robot::initializeControllers()
   {
     for(int i=0; i<joints_nbr; ++i)
     {
-      hardware_interface::JointStateHandle state_handle(joints_names_.at(i), &joint_angles_[i],
+      hardware_interface::JointStateHandle state_handle(joints_names.at(i), &joint_angles_[i],
                                                         &joint_velocities_[i], &joint_efforts_[i]);
       jnt_state_interface_.registerHandle(state_handle);
 
-      hardware_interface::JointHandle pos_handle(jnt_state_interface_.getHandle(joints_names_.at(i)),
+      hardware_interface::JointHandle pos_handle(jnt_state_interface_.getHandle(joints_names.at(i)),
                                                  &joint_commands_[i]);
       jnt_pos_interface_.registerHandle(pos_handle);
     }
@@ -225,7 +109,7 @@ bool Robot::initializeControllers()
     ROS_ERROR("Could not initialize hardware interfaces!\n\tTrace: %s", e.what());
     return false;
   }
-  ROS_INFO_STREAM(session_name_ << " module initialized!");
+
   return true;
 }
 
@@ -238,165 +122,88 @@ bool Robot::connect()
   // Load ROS Parameters
   loadParams();
 
-  // Initialize DCM Proxy
-  try
+  // Initialize DCM Wrapper
+  if (use_dcm_)
+    dcm_ = boost::shared_ptr<DCM>(new DCM(_session, controller_freq_));
+
+  // Initialize Memory Wrapper
+  memory_ = boost::shared_ptr<Memory>(new Memory(_session));
+
+  //get the robot's name
+  std::string robot = memory_->getData("RobotConfig/Body/Type");
+  std::transform(robot.begin(), robot.end(), robot.begin(), ::tolower);
+
+  // Initialize Motion Wrapper
+  motion_ = boost::shared_ptr<Motion>(new Motion(_session));
+
+  // check if the robot is waked up
+  if (motor_groups_.size() == 1)
   {
-    dcm_proxy_ = _session->service("DCM");
+    if (motor_groups_[0] == "Body")
+      motion_->wakeUp();
   }
-  catch (const std::exception& e)
+  if (!motion_->robotIsWakeUp())
   {
-    ROS_ERROR("Failed to connect to DCM Proxy!\n\tTrace: %s", e.what());
+    ROS_ERROR("Please, wakeUp the robot to be able to set stiffness");
+    stopService();
     return false;
   }
 
-  // Initialize Memory Proxy
-  try
-  {
-    memory_proxy_ = _session->service("ALMemory");
+  if (use_dcm_)
+    motion_->manageConcurrence();
 
-    //get the robot name
-    robot_ = memory_proxy_.call<std::string>("getData", "RobotConfig/Body/Type" );
-    std::transform(robot_.begin(), robot_.end(), robot_.begin(), ::tolower);
-  }
-  catch (const std::exception& e)
-  {
-    ROS_ERROR("Failed to connect to Memory Proxy!\n\tTrace: %s", e.what());
-    return false;
-  }
+  //read joints names that will be controlled
+  std::vector <std::string> joints_names = motion_->getBodyNamesFromGroup(motor_groups_);
+  ignoreMimicJoints(&joints_names);
+  ROS_INFO_STREAM("The following joints are controlled: " << print(joints_names));
 
-  // Allow for temperature reporting (for CPU)
-  try
-  {
-    if ((robot_ == "pepper") || (robot_ == "nao")) {
-      qi::AnyObject body_temperature_ = _session->service("ALBodyTemperature");
-      body_temperature_.call<void>("setEnableNotifications", true);
-    }
-  }
-  catch (const std::exception& e)
-  {
-    ROS_ERROR("Failed to connect to ALBodyTemperature!\n\tTrace: %s", e.what());
-    return false;
-  }
+  //initialise Memory, Motion, and DCM classes with controlled joints
+  memory_->init(joints_names);
+  motion_->init(joints_names);
+  if (use_dcm_)
+    dcm_->init(joints_names);
 
-  // Initialize Motion Proxy
-  try
-  {
-    motion_proxy_ = _session->service("ALMotion");
-  }
-  catch (const std::exception& e)
-  {
-    ROS_ERROR("Failed to connect to Motion Proxy!\n\tTrace: %s", e.what());
-    return false;
-  }
+  //read joints names to initialize the joint_states topic
+  joint_states_topic_.header.frame_id = "base_link";
+  joint_states_topic_.name = motion_->getBodyNames("Body"); //should be Body=JointActuators+Wheels
+  joint_states_topic_.position.resize(joint_states_topic_.name.size());
+  keys_positions_all_ = memory_->initMemoryKeys(joint_states_topic_.name);
 
-  // Initialize joints to control
-  try
-  {
-    //going to rest
-    if (!motion_proxy_.call<bool>("robotIsWakeUp"))
-    {
-      if (motor_groups_.size() > 1)
-      {
-        ROS_ERROR("Please, wakeUp the robot to be able to set stiffness");
-        stopService();
-      }
-      if (motor_groups_.size() == 1)
-        if (motor_groups_[0] == "Body")
-        {
-          motion_proxy_.call<void>("wakeUp");
-          ROS_INFO_STREAM("Going to wakeup ...");
-          sleep(4);
-        }
-    }
-
-    //reading joints names that will be controlled
-    try
-    {
-      for (std::vector<std::string>::const_iterator it=motor_groups_.begin(); it!=motor_groups_.end(); ++it)
-      {
-        std::vector <std::string> joint_names_g =
-            motion_proxy_.call<std::vector <std::string> >("getBodyNames", *it);
-        joints_names_.insert(joints_names_.end(), joint_names_g.begin(), joint_names_g.end());
-      }
-    }
-    catch (const std::exception& e)
-    {
-      ROS_ERROR("Failed to getBodyNames!\n\tTrace: %s", e.what());
-    }
-    std::stringstream ss;
-    std::copy(joints_names_.begin(), joints_names_.end()-1, std::ostream_iterator<std::string>(ss,", "));
-    std::copy(joints_names_.end()-1, joints_names_.end(), std::ostream_iterator<std::string>(ss));
-    ROS_INFO("Robot's joints that will be controlled are: %s",ss.str().c_str());
-
-    //joint_states topic initialization
-    joint_states_topic_.name =
-        motion_proxy_.call<std::vector <std::string> >("getBodyNames", "Body");
-    joint_states_topic_.position.resize(joint_states_topic_.name.size());
-
-    //initializing the Diagnostics
-    try
-    {
-      std::vector<std::string> joints_all_names =
-          motion_proxy_.call<std::vector<std::string> >("getBodyNames", "JointActuators");
-      diagPtr_ = boost::shared_ptr<Diagnostics>(
-            new Diagnostics(_session, &diag_pub_, joints_all_names, temperature_error_));
-    }
-    catch (const std::exception& e)
-    {
-      ROS_ERROR("Failed to getBodyNames!\n\tTrace: %s", e.what());
-    }
-  }
-  catch (const std::exception& e)
-  {
-    ROS_ERROR("Failed to getBodyNames from Motion proxy!\n\tTrace: %s", e.what());
-    return false;
-  }
+  //read joints names to initialize the diagnostics
+  std::vector<std::string> joints_all_names = motion_->getBodyNames("JointActuators");
+  diagnostics_ = boost::shared_ptr<Diagnostics>(
+        new Diagnostics(_session, &diag_pub_, joints_all_names, robot));
 
   is_connected_ = true;
 
   // Subscribe/Publish ROS Topics/Services
   subscribe();
 
+  // Turn Stiffness On
+  if (!setStiffness(1.0f))
+    return false;
+
   // Initialize Controller Manager and Controllers
   manager_ = new controller_manager::ControllerManager( this, *nhPtr_);
-  if(!initializeControllers())
-  {
-    ROS_ERROR("Could not load controllers!");
+  if(!initializeControllers(joints_names))
     return false;
-  }
-  ROS_INFO("Controllers successfully loaded!");
+
+  ROS_INFO_STREAM(session_name_ << " module initialized!");
   return true;
-}
-
-void Robot::disconnect()
-{
-  if(!is_connected_)
-    return;
-
-  setStiffness(0.0f);
-
-  try
-  {
-    unsubscribeFromMicroEvent("ClientDisconnected", session_name_);
-  }
-  catch (const std::exception& e)
-  {
-    ROS_ERROR("Failed to unsubscribe from subscribed events!\n\tTrace: %s", e.what());
-  }
-  is_connected_ = false;
 }
 
 void Robot::subscribe()
 {
   // Subscribe/Publish ROS Topics/Services
-  cmd_vel_sub_ = nhPtr_->subscribe(prefix_+"cmd_vel", topic_queue_, &Robot::commandVelocity, this);
+  if (use_cmd_vel_)
+    cmd_vel_sub_ = nhPtr_->subscribe(prefix_+"cmd_vel", topic_queue_, &Robot::commandVelocity, this);
 
   diag_pub_ = nhPtr_->advertise<diagnostic_msgs::DiagnosticArray>(prefix_+"diagnostics", topic_queue_);
 
   stiffness_pub_ = nhPtr_->advertise<std_msgs::Float32>(prefix_+"stiffnesses", topic_queue_);
   stiffness_.data = 1.0f;
 
-  joint_states_pub_ = nhPtr_->advertise<sensor_msgs::JointState>(prefix_+"joint_states", topic_queue_);
+  joint_states_pub_ = nhPtr_->advertise<sensor_msgs::JointState>("/joint_states", topic_queue_);
 }
 
 void Robot::loadParams()
@@ -405,91 +212,35 @@ void Robot::loadParams()
   // Load Server Parameters
   nh.getParam("BodyType", body_type_);
   nh.getParam("TopicQueue", topic_queue_);
-  nh.getParam("Prefix", prefix_);
-  prefix_ += "/";
   nh.getParam("HighCommunicationFrequency", high_freq_);
   nh.getParam("ControllerFrequency", controller_freq_);
   nh.getParam("JointPrecision", joint_precision_);
   nh.getParam("OdomFrame", odom_frame_);
+  nh.getParam("use_dcm", use_dcm_);
+  if (use_dcm_)
+    ROS_WARN_STREAM("Please, be carefull! You have chosen to control the robot based on DCM. "
+                    << "This leads to concurrence between DCM and ALMotion and "
+                    << "it can cause shaking the robot. If it starts shaking, stop the node, "
+                    << "for example by pressing Ctrl+C");
 
-  //FIXME: set it from controllers
-  //choose motor groups to control
+  //set the prefix for topics
+  nh.getParam("Prefix", prefix_);
+  if (prefix_.length() > 0)
+    if (prefix_.at(prefix_.length()-1) != '/')
+      prefix_ += "/";
+
+  //set the motors groups to control
   std::string tmp="";
   nh.getParam("motor_groups", tmp);
   boost::erase_all(tmp, " ");
   boost::split (motor_groups_, tmp, boost::is_any_of(","));
   if (motor_groups_.size() == 1)
     if (motor_groups_[0].empty())
-      motor_groups_.erase(motor_groups_.begin());
+      motor_groups_.clear();
   if (motor_groups_.size() == 0)
   {
     motor_groups_.push_back("LArm");
     motor_groups_.push_back("RArm");
-  }
-}
-
-void Robot::DCMAliasTimedCommand(const std::string& alias,
-                                 const std::vector<float> &values,
-                                 const std::vector<int> &timeOffsets,
-                                 const std::string& type_update,
-                                 const std::string& type_time)
-{
-  // Create Alias timed-command
-  std::vector <qi::AnyValue> command;
-  command.reserve(4);
-  command.resize(4);
-  command[0] = qi::AnyValue(qi::AnyReference::from(alias), false, false);
-  command[1] = qi::AnyValue(qi::AnyReference::from(type_update), false, false);
-  command[2] = qi::AnyValue(qi::AnyReference::from(type_time), false, false);
-
-  std::vector <std::vector <std::vector <qi::AnyValue> > > command_keys;
-  command_keys.resize(values.size());
-
-  //get DCM time in 1 sec
-  int time = dcm_proxy_.call<int>("getTime", 0);
-  for(int i=0; i<values.size(); ++i)
-  {
-    command_keys[i].resize(1);
-    command_keys[i][0].resize(2);
-    command_keys[i][0][0] = qi::AnyValue(qi::AnyReference::from(values[i]), false, false);
-    command_keys[i][0][1] = qi::AnyValue(qi::AnyReference::from(time+timeOffsets[i]), false, false);
-  }
-  command[3] = qi::AnyValue(qi::AnyReference::from(command_keys), false, false);
-  qi::AnyValue command_qi = qi::AnyValue(qi::AnyReference::from(command), false, false);
-
-  try
-  {
-    // Execute Alias timed-command
-    dcm_proxy_.call<void>("setAlias", command_qi);
-  }
-  catch(const std::exception& e)
-  {
-    ROS_ERROR("Could not execute DCM timed-command!\n\t%s\n\n\tTrace: %s", alias.c_str(), e.what());
-  }
-}
-
-void Robot::subscribeToMicroEvent(const std::string &name, const std::string &callback_module,
-                                const std::string &callback_method, const std::string &callback_message)
-{
-  try
-  {
-    memory_proxy_.call<int>("subscribeToMicroEvent", name, callback_module, callback_message, callback_method);
-  }
-  catch(const std::exception& e)
-  {
-    ROS_ERROR("Could not subscribe to micro-event '%s'.\n\tTrace: %s", name.c_str(), e.what());
-  }
-}
-
-void Robot::unsubscribeFromMicroEvent(const std::string &name, const std::string &callback_module)
-{
-  try
-  {
-    memory_proxy_.call<void>("unsubscribeToMicroEvent", name, callback_module);
-  }
-  catch(const std::exception& e)
-  {
-    ROS_ERROR("Could not unsubscribe from micro-event '%s'.\n\tTrace: %s", name.c_str(), e.what());
   }
 }
 
@@ -508,39 +259,20 @@ void Robot::controllerLoop()
     if(!is_connected_)
       break;
 
-    try
-    {
-      dcm_proxy_.call<void>("ping");
-    }
-    catch(const std::exception& e)
-    {
-      ROS_ERROR("Could not ping DCM proxy.\n\tTrace: %s", e.what());
-      is_connected_ = false;
-      rate.sleep();
-      continue;
-    }
-
     //publishBaseFootprint(time);
 
-    if(stiffnesses_enabled_)
-    {
-      stiffness_.data = 1.0f;
-    }
-    else
-    {
-      stiffness_.data = 0.0f;
-    }
     stiffness_pub_.publish(stiffness_);
 
     readJoints();
 
-    manager_->update(time, ros::Duration(1.0f/controller_freq_));
+    if (!diagnostics_->publish())
+      stopService();
 
-    stiffness_pub_.publish(stiffness_);
+    manager_->update(time, ros::Duration(1.0f/controller_freq_));
 
     writeJoints();
 
-    //publishJointStateFromAlMotion();
+    publishJointStateFromAlMotion();
 
     rate.sleep();
   }
@@ -554,12 +286,16 @@ bool Robot::isConnected()
 
 void Robot::commandVelocity(const geometry_msgs::TwistConstPtr &msg)
 {
-  // no need to check for max velocity since motion clamps the velocities internally
-  const float& vel_x = msg->linear.x;
-  const float& vel_y = msg->linear.y;
-  const float& vel_th = msg->angular.z;
-  std::cout << "going to move x: " << vel_x << " y: " << vel_y << " th: " << vel_th << std::endl;
-  motion_proxy_.async<void>("move", vel_x, vel_y, vel_th);
+  //reset stiffness for arms if using DCM to prevent its concurrence with ALMotion
+  if(use_dcm_)
+    motion_->setStiffnessArms(0.0f, 1.0f);
+
+  motion_->moveTo(msg->linear.x, msg->linear.y, msg->angular.z);
+  sleep(1.0);
+
+  //set stiffness for arms if using DCM
+  if(use_dcm_)
+    motion_->setStiffnessArms(1.0f, 1.0f);
 }
 
 void Robot::publishBaseFootprint(const ros::Time &ts)
@@ -606,114 +342,79 @@ void Robot::publishBaseFootprint(const ros::Time &ts)
 
 void Robot::readJoints()
 {
-  //get joints positions
-  std::vector<float> joint_positions;
-  try
-  {
-    qi::AnyValue keys_positions_qi = memory_proxy_.call<qi::AnyValue>("getListData", keys_positions_);
-    fromAnyValueToFloatVector(keys_positions_qi, joint_positions);
-  }
-  catch(const std::exception& e)
-  {
-    ROS_ERROR("Could not get joint data from the robot \n\tTrace: %s", e.what());
-    return;
-  }
+  //read memory keys
+  std::vector<float> joint_positions = memory_->getListData();
 
-  if (!diagPtr_->publish())
+  //store joints angles
+  std::vector <double>::iterator it_command = joint_commands_.begin();
+  std::vector <double>::iterator it_now = joint_angles_.begin();
+  std::vector <float>::iterator it_sensor = joint_positions.begin();
+  for(; it_command<joint_commands_.end(); ++it_command, ++it_now, ++it_sensor)
   {
-    setStiffness(0.0f);
-    ROS_INFO_STREAM("HIGH JOINT TEMPERATURE IS DETECTED ");
-    stopService();
-  }
-
-  std::vector <double>::iterator it_comm = joint_commands_.begin();
-  std::vector <double>::iterator it_cur = joint_angles_.begin();
-  std::vector <float>::iterator it_mem = joint_positions.begin();
-  for(; it_comm<joint_commands_.end(); ++it_comm, ++it_cur, ++it_mem)
-  {
-    *it_cur = *it_mem;
+    *it_now = *it_sensor;
     // Set commands to the read angles for when no command specified
-    *it_comm = *it_mem;
+    *it_command = *it_sensor;
   }
 }
 
 void Robot::publishJointStateFromAlMotion(){
-  std::vector<double> positionData;
-  positionData = motion_proxy_.call<std::vector <double> >("getAngles", "Body", 1);
   joint_states_topic_.header.stamp = ros::Time::now();
-  joint_states_topic_.header.frame_id = "base_link";
-  for(int i = 0; i<positionData.size(); ++i)
-  {
-     joint_states_topic_.position[i] = positionData[i];
-  }
+
+  std::vector<double> position_data = motion_->getAngles("Body");
+  for(int i = 0; i<position_data.size(); ++i)
+    joint_states_topic_.position[i] = position_data[i];
 
   joint_states_pub_.publish(joint_states_topic_);
 }
 
 void Robot::writeJoints()
 {
-  // Update joints only when actual command is issued
+  // Check if there is some change in joints values
   bool changed(false);
   std::vector<double>::iterator it_now = joint_angles_.begin();
-  std::vector<double>::iterator it_comm = joint_commands_.begin();
-  for(int i=0; it_comm != joint_commands_.end(); ++i, ++it_comm, ++it_now)
+  std::vector<double>::iterator it_command = joint_commands_.begin();
+  for(int i=0; it_command != joint_commands_.end(); ++i, ++it_command, ++it_now)
   {
-    double diff = fabs(*it_comm - *it_now);
+    double diff = fabs(*it_command - *it_now);
     if(diff > joint_precision_)
     {
-      //ROS_INFO_STREAM(" joint " << i << " : " << *it_now << " != " << *it_comm << " diff=" << diff);
+      //ROS_INFO_STREAM(" joint " << i << " : diff=" << diff);
       changed = true;
       break;
     }
   }
-  // Do not write joints if no change in joint values
+
+  // Update joints values if there are some changes
   if(!changed)
     return;
 
-  try
-  {
-    int time = dcm_proxy_.call<int>("getTime", 0) + static_cast<int>(5000.0/controller_freq_);
+  if (use_dcm_)
+    dcm_->writeJoints(joint_commands_);
+  else
+    motion_->writeJoints(joint_commands_);
+}
 
-    std::vector<double>::iterator it_comm = joint_commands_.begin();
-    for(int i=0; i<joint_commands_.size(); ++i, ++it_comm)
+void Robot::ignoreMimicJoints(std::vector <std::string> *joints)
+{
+  //ignore mimic joints
+  for(std::vector<std::string>::iterator it=joints->begin(); it!=joints->end(); ++it)
+  {
+    if( (it->find("Wheel") != std::string::npos)
+         || (*it=="RHand" || *it=="LHand" || *it == "RWristYaw" || *it == "LWristYaw") && (body_type_ == "H21"))
     {
-      commands_values_[i][0][0] = qi::AnyValue(qi::AnyReference::from(static_cast<float>(*it_comm)), false, false);
-      commands_values_[i][0][1] = qi::AnyValue(qi::AnyReference::from(time), false, false);
+      joints->erase(it);
+      it--;
     }
-
-    commands_[3] = qi::AnyValue(qi::AnyReference::from(commands_values_), false, false);
-    qi::AnyValue commands_qi = qi::AnyValue(qi::AnyReference::from(commands_), false, false);
-
-    dcm_proxy_.call<void>("setAlias", commands_qi);
-  }
-  catch(const std::exception& e)
-  {
-    ROS_ERROR("Could not send joint commands to the robot : \n\tTrace: %s", e.what());
-    return;
   }
 }
 
+//  rewrite by calling DCM rather than ALMotion
 bool Robot::setStiffness(const float &stiffness)
 {
-  //set stiffness after wakeUp the robot
-  try
-  {
-    for (std::vector<std::string>::const_iterator it=motor_groups_.begin(); it!=motor_groups_.end(); ++it)
-      motion_proxy_.call<void>("stiffnessInterpolation", *it, stiffness, 1.0f);
-  }
-  catch (const std::exception &e)
-  {
-     ROS_ERROR("Could not WakeUp the robot : %s", e.what());
-     return false;
-  }
+  stiffness_.data = stiffness;
 
-//  replace by calling DCM
-//  DCMAliasTimedCommand("JointsHardness", std::vector<float>(hardness_times_.size(), stiffness), hardness_times_);
-
-  if (stiffness == 1.0f)
-    stiffnesses_enabled_ = true;
-  else
-    stiffnesses_enabled_ = false;
+  if (!motion_->stiffnessInterpolation(motor_groups_, stiffness, 1.0f))
+    return false;
 
   return true;
 }

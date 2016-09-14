@@ -30,6 +30,9 @@
 #include <controller_manager/controller_manager.h>
 
 #include "naoqi_dcm_driver/diagnostics.hpp"
+#include "naoqi_dcm_driver/memory.hpp"
+#include "naoqi_dcm_driver/dcm.hpp"
+#include "naoqi_dcm_driver/motion.hpp"
 
 template<typename T, size_t N>
 T * end(T (&ra)[N]) {
@@ -41,7 +44,7 @@ class Robot : public hardware_interface::RobotHW
 public:
   /**
   * @brief Constructor
-  * @param session[in] session pointer for naoqi2 service registration
+  * @param session[in] session pointer for the service registration
   */
   Robot(qi::SessionPtr session);
 
@@ -57,14 +60,8 @@ public:
   //! @brief Connection to ALProxies
   bool connect();
 
-  //! @brief Disconnection
-  void disconnect();
-
-  //! @brief initialization procedure
-  bool initialize();
-
-  //! @brief initialization of controllers
-  bool initializeControllers();
+  //! @brief initialization of controllers based on joints names
+  bool initializeControllers(const std::vector <std::string> &joints_names);
 
   //! @brief defining Subscribe/Advertise to ROS Topics/Services
   void subscribe();
@@ -72,24 +69,8 @@ public:
   //! @brief loading parameters
   void loadParams();
 
-  //! @brief DCM Wrapper Method
-  void DCMAliasTimedCommand(const std::string& alias,
-                            const std::vector<float>& values,
-                            const std::vector<int>& timeOffsets,
-                            const std::string& type_update="Merge",
-                            const std::string& type_time="time-mixed");
-
-  //! @brief subscribe to micro-event Wrapper Method
-  void subscribeToMicroEvent(const std::string& name, const std::string& callback_module,
-                             const std::string& callback_method, const std::string& callback_message="");
-
-  //! @brief unsubscribe from micro-event Wrapper Method
-  void unsubscribeFromMicroEvent(const std::string& name, const std::string& callback_module);
-
   //! @brief the main loop
   void controllerLoop();
-
-  // ROS Callbacks/Related Methods
 
   //! @brief controlling the robot's velocity
   void commandVelocity(const geometry_msgs::TwistConstPtr &msg);
@@ -112,11 +93,24 @@ public:
   //! @brief start the main loop
   void run();
 
+  //! @brief ignore mimic joints from control
+  void ignoreMimicJoints(std::vector <std::string> *joints);
+
 private:
   /** node handle pointer*/
   boost::scoped_ptr <ros::NodeHandle> nhPtr_;
 
-  boost::shared_ptr <Diagnostics> diagPtr_;
+  /** pointer to Diagnostics class */
+  boost::shared_ptr <Diagnostics> diagnostics_;
+
+  /** pointer to Memory class */
+  boost::shared_ptr <Memory> memory_;
+
+  /** pointer to DCM class */
+  boost::shared_ptr <DCM> dcm_;
+
+  /** pointer to Motion class */
+  boost::shared_ptr <Motion> motion_;
 
   /** velocity publisher */
   ros::Subscriber cmd_vel_sub_;
@@ -133,11 +127,11 @@ private:
   /** diagnostics publisher */
   ros::Publisher diag_pub_;
 
-  /** stiffness data */
-  std_msgs::Float32 stiffness_;
-
   /** joint states publisher */
   ros::Publisher joint_states_pub_;
+
+  /** stiffness data */
+  std_msgs::Float32 stiffness_;
 
   /** joint states data */
   sensor_msgs::JointState joint_states_topic_;
@@ -145,14 +139,10 @@ private:
   /** controller manager */
   controller_manager::ControllerManager* manager_;
 
-  /** aliases to send DCM commands */
-  std::vector <qi::AnyValue> commands_;
-  std::vector <std::vector <std::vector <qi::AnyValue> > > commands_values_;
-
   /** service name */
   std::string session_name_;
 
-  /** is session connected */
+  /** session connection status */
   bool is_connected_;
 
   /** robot body type */
@@ -163,9 +153,6 @@ private:
 
   /** odom frame name */
   std::string odom_frame_;
-
-  /** stiffness status */
-  bool stiffnesses_enabled_;
 
   /** message buffer */
   int topic_queue_;
@@ -182,29 +169,17 @@ private:
   /** Naoqi session pointer */
   qi::SessionPtr _session;
 
-  /** Memory proxy */
-  qi::AnyObject memory_proxy_;
-
-  /** DCM proxy */
-  qi::AnyObject dcm_proxy_;
-
-  /** Motion proxy */
-  qi::AnyObject motion_proxy_;
-
   /** motor groups used to control */
   std::vector <std::string> motor_groups_;
 
-  /** joints positions keys to read */
-  std::vector <std::string> keys_positions_;
+  /** all joints positions keys to read */
+  std::vector <std::string> keys_positions_all_;
 
   /** joints states from ROS hardware interface */
   hardware_interface::JointStateInterface jnt_state_interface_;
 
   /** joints positions from ROS hardware interface */
   hardware_interface::PositionJointInterface jnt_pos_interface_;
-
-  /** joints names */
-  std::vector <std::string> joints_names_;
 
   /** joints angles to apply */
   std::vector <double> joint_commands_;
@@ -218,11 +193,11 @@ private:
   /** joints efforts from ROS hardware interface */
   std::vector <double> joint_efforts_;
 
-  /** the robot name */
-  std::string robot_;
+  /** enable using DCM instead of ALMotion */
+  bool use_dcm_;
 
-  /** maximum temperature */
-  float temperature_error_;
+  /** enable velocity control and publish cmd_vel */
+  bool use_cmd_vel_;
 };
 
 #endif // NAOQI_DCM_DRIVER_H

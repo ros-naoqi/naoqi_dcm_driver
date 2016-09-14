@@ -17,8 +17,57 @@
 
 #include "naoqi_dcm_driver/tools.hpp"
 
-std::vector<float> fromAnyValueToFloatVector(qi::AnyValue& value, std::vector<float>& result)
+qi::AnyValue fromStringVectorToAnyValue(const std::vector<std::string> &vector)
 {
+  qi::AnyValue res;
+  try
+  {
+    std::vector<qi::AnyValue> vector_qi;
+    vector_qi.reserve(vector.size());
+    vector_qi.resize(vector.size());
+
+    std::vector<std::string>::const_iterator it = vector.begin();
+    std::vector<qi::AnyValue>::iterator it_qi = vector_qi.begin();
+    for(; it != vector.end(); ++it, ++it_qi)
+    {
+      *it_qi = qi::AnyValue(qi::AnyReference::from(*it), false, false);
+    }
+    res = qi::AnyValue(qi::AnyReference::from(vector_qi), false, false);
+  }
+  catch(const std::exception& e)
+  {
+    std::cout << "Could not convert to qi::AnyValue \n\tTrace: " << e.what() << std::endl;
+  }
+  return res;
+}
+
+qi::AnyValue fromDoubleVectorToAnyValue(const std::vector<double> &vector)
+{
+  qi::AnyValue res;
+  try
+  {
+    std::vector<qi::AnyValue> vector_qi;
+    vector_qi.reserve(vector.size());
+    vector_qi.resize(vector.size());
+
+    std::vector<double>::const_iterator it = vector.begin();
+    std::vector<qi::AnyValue>::iterator it_qi = vector_qi.begin();
+    for(; it != vector.end(); ++it, ++it_qi)
+    {
+      *it_qi = qi::AnyValue(qi::AnyReference::from(static_cast<float>(*it)), false, false);
+    }
+    res = qi::AnyValue(qi::AnyReference::from(vector_qi), false, false);
+  }
+  catch(const std::exception& e)
+  {
+    std::cout << "Could not convert to qi::AnyValue \n\tTrace: " << e.what() << std::endl;
+  }
+  return res;
+}
+
+std::vector<float> fromAnyValueToFloatVector(qi::AnyValue& value)
+{
+  std::vector<float> result;
   qi::AnyReferenceVector anyrefs = value.asListValuePtr();
 
   for(int i=0; i<anyrefs.size(); ++i)
@@ -29,15 +78,16 @@ std::vector<float> fromAnyValueToFloatVector(qi::AnyValue& value, std::vector<fl
     }
     catch(std::runtime_error& e)
     {
-      result.push_back(-1.0);
-      std::cout << e.what() << "=> set to -1" << std::endl;
+      result.push_back(-1.0f);
+      std::cout << e.what() << "=> set to -1.0f" << std::endl;
     }
   }
   return result;
 }
 
-std::vector<int> fromAnyValueToIntVector(qi::AnyValue& value, std::vector<int>& result)
+std::vector<int> fromAnyValueToIntVector(qi::AnyValue& value)
 {
+  std::vector<int> result;
   qi::AnyReferenceVector anyrefs = value.asListValuePtr();
 
   for(int i=0; i<anyrefs.size();i++)
@@ -48,9 +98,17 @@ std::vector<int> fromAnyValueToIntVector(qi::AnyValue& value, std::vector<int>& 
     }
     catch(std::runtime_error& e)
     {
-      result.push_back(-1.0);
+      result.push_back(-1);
       std::cout << e.what() << "=> set to -1" << std::endl;
     }
   }
   return result;
+}
+
+std::string print(const std::vector <std::string> &vector)
+{
+  std::stringstream ss;
+  std::copy(vector.begin(), vector.end()-1, std::ostream_iterator<std::string>(ss,", "));
+  std::copy(vector.end()-1, vector.end(), std::ostream_iterator<std::string>(ss));
+  return ss.str();
 }

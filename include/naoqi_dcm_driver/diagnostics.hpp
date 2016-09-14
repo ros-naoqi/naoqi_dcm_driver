@@ -18,12 +18,12 @@ public:
   * @param session[in] Naoqi session
   * @param pub[in] ROS topic publisher
   * @param joints_all_names[in] all joints to check
-  * @param temperature_error_level[in] maximum temperature
+  * @param robot[in] robot type
   */
   Diagnostics(const qi::SessionPtr& session,
               ros::Publisher *pub,
               const std::vector<std::string> &joints_all_names,
-              float temperature_error_level);
+              const std::string &robot);
 
   //! @brief destroys all ros nodehandle and shutsdown all publisher
   virtual ~Diagnostics() {}
