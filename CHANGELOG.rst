@@ -2,8 +2,8 @@
 Changelog for package naoqi_dcm_driver
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.0.1 (2016-09-16)
+------------------
 * refactoring
 * adding a wrapper for Memory Proxy
 * updating the README
