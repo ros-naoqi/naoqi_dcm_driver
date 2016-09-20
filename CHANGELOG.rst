@@ -2,6 +2,12 @@
 Changelog for package naoqi_dcm_driver
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* fixed Autonomous Life call
+* wakeup the robot during initialization
+* Contributors: nlyubova
+
 0.0.1 (2016-09-16)
 ------------------
 * refactoring
