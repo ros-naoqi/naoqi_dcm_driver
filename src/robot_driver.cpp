@@ -122,8 +122,12 @@ int main(int argc, char** argv)
   try
   {
     qi::AnyObject life_proxy = session->service("ALAutonomousLife");
-    life_proxy.call<void>("exit");
-    ROS_INFO_STREAM("Naoqi AutonomousLife service is shut down");
+    if (life_proxy.call<std::string>("getState") != "disabled")
+    {
+      life_proxy.call<void>("setState", "disabled");
+      ROS_INFO_STREAM("Stutting down Naoqi AutonomousLife ...");
+      ros::Duration(2.0).sleep();
+    }
   }
   catch (const std::exception& e)
   {
@@ -131,7 +135,7 @@ int main(int argc, char** argv)
   }
 
   session->registerService("naoqi_dcm_driver", robot);
-  ros::Duration(0.2).sleep();
+  ros::Duration(0.1).sleep();
 
   if (!robot->connect())
   {
