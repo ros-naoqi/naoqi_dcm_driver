@@ -142,6 +142,8 @@ bool Robot::connect()
     if (motor_groups_[0] == "Body")
       motion_->wakeUp();
   }
+  else if (!use_dcm_)
+    motion_->wakeUp();
   if (!motion_->robotIsWakeUp())
   {
     ROS_ERROR("Please, wakeUp the robot to be able to set stiffness");

@@ -91,7 +91,7 @@ void Motion::wakeUp()
     {
       motion_proxy_.call<void>("wakeUp");
       ROS_INFO_STREAM("Going to wakeup ...");
-      sleep(4);
+      ros::Duration(3.0).sleep();
     }
   }
   catch (const std::exception& e)
