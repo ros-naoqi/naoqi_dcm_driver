@@ -125,7 +125,7 @@ int main(int argc, char** argv)
     if (life_proxy.call<std::string>("getState") != "disabled")
     {
       life_proxy.call<void>("setState", "disabled");
-      ROS_INFO_STREAM("Stutting down Naoqi AutonomousLife ...");
+      ROS_INFO_STREAM("Shutting down Naoqi AutonomousLife ...");
       ros::Duration(2.0).sleep();
     }
   }

@@ -78,8 +78,8 @@ std::vector<float> fromAnyValueToFloatVector(qi::AnyValue& value)
     }
     catch(std::runtime_error& e)
     {
-      result.push_back(-1.0f);
-      std::cout << e.what() << "=> set to -1.0f" << std::endl;
+      result.push_back(0.0f);
+      std::cout << e.what() << "=> set to 0.0f" << std::endl;
     }
   }
   return result;
@@ -108,7 +108,10 @@ std::vector<int> fromAnyValueToIntVector(qi::AnyValue& value)
 std::string print(const std::vector <std::string> &vector)
 {
   std::stringstream ss;
-  std::copy(vector.begin(), vector.end()-1, std::ostream_iterator<std::string>(ss,", "));
-  std::copy(vector.end()-1, vector.end(), std::ostream_iterator<std::string>(ss));
+  if (vector.size() > 0)
+  {
+    std::copy(vector.begin(), vector.end()-1, std::ostream_iterator<std::string>(ss,", "));
+    std::copy(vector.end()-1, vector.end(), std::ostream_iterator<std::string>(ss));
+  }
   return ss.str();
 }
