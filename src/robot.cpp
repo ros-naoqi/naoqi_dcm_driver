@@ -52,17 +52,21 @@ Robot::~Robot()
 void Robot::stopService() {
   ROS_INFO_STREAM(session_name_ << " stopping the service...");
 
-  //reset stiffness for arms if using DCM to prevent its concurrence with ALMotion
-  if(use_dcm_)
-    motion_->setStiffnessArms(0.0f, 1.0f);
+  if (motion_)
+  {
+    /* reset stiffness for arms if using DCM
+     * to prevent its concurrence with ALMotion */
+    if(use_dcm_)
+      motion_->setStiffnessArms(0.0f, 1.0f);
 
-  //going to rest
-  if (motor_groups_.size() == 1)
-    if (motor_groups_[0] == "Body")
-      motion_->rest();
+    //going to rest
+    if (motor_groups_.size() == 1)
+      if (motor_groups_[0] == "Body")
+        motion_->rest();
 
-  //set stiffness for the whole body
-  setStiffness(0.0f);
+    //set stiffness for the whole body
+    setStiffness(0.0f);
+  }
 
   is_connected_ = false;
 
@@ -185,7 +189,16 @@ bool Robot::connect()
     return false;
 
   // Initialize Controller Manager and Controllers
-  manager_ = new controller_manager::ControllerManager( this, *nhPtr_);
+  try
+  {
+    manager_ = new controller_manager::ControllerManager( this, *nhPtr_);
+  }
+  catch(const ros::Exception& e)
+  {
+    ROS_ERROR("Could not initialize controller manager!\n\tTrace: %s", e.what());
+    return false;
+  }
+
   if(!initializeControllers(joints_names))
     return false;
 
@@ -269,7 +282,15 @@ void Robot::controllerLoop()
     if (!diagnostics_->publish())
       stopService();
 
-    manager_->update(time, ros::Duration(1.0f/controller_freq_));
+    try
+    {
+      manager_->update(time, ros::Duration(1.0f/controller_freq_));
+    }
+    catch(ros::Exception& e)
+    {
+      ROS_ERROR("%s", e.what());
+      return;
+    }
 
     writeJoints();
 
