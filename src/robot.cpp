@@ -246,8 +246,7 @@ void Robot::loadParams()
   //set the motors groups to control
   std::string tmp="";
   nh.getParam("motor_groups", tmp);
-  boost::erase_all(tmp, " ");
-  boost::split (motor_groups_, tmp, boost::is_any_of(","));
+  boost::split (motor_groups_, tmp, boost::is_any_of(" "));
   if (motor_groups_.size() == 1)
     if (motor_groups_[0].empty())
       motor_groups_.clear();
