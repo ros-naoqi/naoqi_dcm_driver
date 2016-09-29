@@ -169,7 +169,6 @@ bool Robot::connect()
   joint_states_topic_.header.frame_id = "base_link";
   joint_states_topic_.name = motion_->getBodyNames("Body"); //should be Body=JointActuators+Wheels
   joint_states_topic_.position.resize(joint_states_topic_.name.size());
-  keys_positions_all_ = memory_->initMemoryKeys(joint_states_topic_.name);
 
   //read joints names to initialize the diagnostics
   std::vector<std::string> joints_all_names = motion_->getBodyNames("JointActuators");

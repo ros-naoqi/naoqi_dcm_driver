@@ -48,40 +48,44 @@ public:
   */
   Robot(qi::SessionPtr session);
 
-  //! @brief destroys all ros nodehandle and shutsdown all publisher
+  //! @brief destroy all ros nodehandle and shutsdown all publisher
   ~Robot();
 
-  //! @brief Function to stop the service
+  //! @brief stop the service
   void stopService();
 
-  //! @brief Function to check if service is connected
+  //! @brief check if the service is connected
   bool isConnected();
 
-  //! @brief Connection to ALProxies
+  //! @brief connect to ALProxies
   bool connect();
 
-  //! @brief initialization of controllers based on joints names
+  //! @brief start the main loop
+  void run();
+
+private:
+  //! @brief initialize controllers based on joints names
   bool initializeControllers(const std::vector <std::string> &joints_names);
 
-  //! @brief defining Subscribe/Advertise to ROS Topics/Services
+  //! @brief define Subscribe/Advertise to ROS Topics/Services
   void subscribe();
 
-  //! @brief loading parameters
+  //! @brief load parameters
   void loadParams();
 
   //! @brief the main loop
   void controllerLoop();
 
-  //! @brief controlling the robot's velocity
+  //! @brief control the robot's velocity
   void commandVelocity(const geometry_msgs::TwistConstPtr &msg);
 
-  //! @brief publishing the base_footprint
+  //! @brief publish the base_footprint
   void publishBaseFootprint(const ros::Time &ts);
 
-  //! @brief reading joints values
+  //! @brief read joints values
   void readJoints();
 
-  //! @brief publishing joint states
+  //! @brief publish joint states
   void publishJointStateFromAlMotion();
 
   //! @brief set joints values
@@ -90,13 +94,9 @@ public:
   //! @brief set stiffness
   bool setStiffness(const float &stiffness);
 
-  //! @brief start the main loop
-  void run();
-
   //! @brief ignore mimic joints from control
   void ignoreMimicJoints(std::vector <std::string> *joints);
 
-private:
   /** node handle pointer*/
   boost::scoped_ptr <ros::NodeHandle> nhPtr_;
 
@@ -171,9 +171,6 @@ private:
 
   /** motor groups used to control */
   std::vector <std::string> motor_groups_;
-
-  /** all joints positions keys to read */
-  std::vector <std::string> keys_positions_all_;
 
   /** joints states from ROS hardware interface */
   hardware_interface::JointStateInterface jnt_state_interface_;
