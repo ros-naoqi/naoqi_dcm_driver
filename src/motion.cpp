@@ -89,8 +89,8 @@ void Motion::wakeUp()
   {
     if (!robotIsWakeUp())
     {
-      motion_proxy_.call<void>("wakeUp");
       ROS_INFO_STREAM("Going to wakeup ...");
+      motion_proxy_.call<void>("wakeUp");
       ros::Duration(3.0).sleep();
     }
   }
@@ -106,8 +106,8 @@ void Motion::rest()
   {
     if (motion_proxy_.call<bool>("robotIsWakeUp"))
     {
-      motion_proxy_.call<void>("rest");
       ROS_INFO_STREAM("Going to rest ...");
+      motion_proxy_.call<void>("rest");
       sleep(4);
     }
   }
