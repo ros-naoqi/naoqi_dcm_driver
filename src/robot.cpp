@@ -434,7 +434,7 @@ bool Robot::setStiffness(const float &stiffness)
 {
   stiffness_.data = stiffness;
 
-  if (!motion_->stiffnessInterpolation(motor_groups_, stiffness, 1.0f))
+  if (!motion_->stiffnessInterpolation(motor_groups_, stiffness, 2.0f))
     return false;
 
   return true;
