@@ -112,8 +112,8 @@ private:
   /** pointer to Motion class */
   boost::shared_ptr <Motion> motion_;
 
-  /** velocity publisher */
-  ros::Subscriber cmd_vel_sub_;
+  /** subscrier to MoveTo */
+  ros::Subscriber cmd_moveto_sub_;
 
   /** base_footprint broadcaster */
   tf::TransformBroadcaster base_footprint_broadcaster_;
@@ -192,9 +192,6 @@ private:
 
   /** enable using DCM instead of ALMotion */
   bool use_dcm_;
-
-  /** enable velocity control and publish cmd_vel */
-  bool use_cmd_vel_;
 };
 
 #endif // NAOQI_DCM_DRIVER_H

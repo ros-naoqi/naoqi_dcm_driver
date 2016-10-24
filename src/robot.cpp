@@ -39,8 +39,7 @@ Robot::Robot(qi::SessionPtr session):
                controller_freq_(15.0),
                joint_precision_(0.1),
                odom_frame_("odom"),
-               use_dcm_(false),
-               use_cmd_vel_(false)
+               use_dcm_(false)
 {
 }
 
@@ -209,8 +208,7 @@ bool Robot::connect()
 void Robot::subscribe()
 {
   // Subscribe/Publish ROS Topics/Services
-  if (use_cmd_vel_)
-    cmd_vel_sub_ = nhPtr_->subscribe(prefix_+"cmd_vel", topic_queue_, &Robot::commandVelocity, this);
+  cmd_moveto_sub_ = nhPtr_->subscribe(prefix_+"cmd_moveto", 1, &Robot::commandVelocity, this);
 
   diag_pub_ = nhPtr_->advertise<diagnostic_msgs::DiagnosticArray>(prefix_+"diagnostics", topic_queue_);
 

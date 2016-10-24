@@ -173,7 +173,7 @@ void Motion::moveTo(const float& vel_x, const float& vel_y, const float& vel_th)
 
   try
   {
-    motion_proxy_.async<void>("move", vel_x, vel_y, vel_th);
+    motion_proxy_.call<void>("moveTo", vel_x, vel_y, vel_th);
   }
   catch (const std::exception& e)
   {
