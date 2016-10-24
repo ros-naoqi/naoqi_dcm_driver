@@ -207,7 +207,7 @@ void Motion::writeJoints(const std::vector <double> &joint_commands)
 
   try
   {
-    motion_proxy_.call<void>("setAngles", names_qi, angles_qi, 1.0f);
+    motion_proxy_.async<void>("setAngles", names_qi, angles_qi, 0.1f);
   }
   catch(const std::exception& e)
   {
