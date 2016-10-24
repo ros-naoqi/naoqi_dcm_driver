@@ -71,7 +71,7 @@ private:
   void subscribe();
 
   //! @brief load parameters
-  void loadParams();
+  bool loadParams();
 
   //! @brief the main loop
   void controllerLoop();
@@ -178,17 +178,26 @@ private:
   /** joints positions from ROS hardware interface */
   hardware_interface::PositionJointInterface jnt_pos_interface_;
 
-  /** joints angles to apply */
-  std::vector <double> joint_commands_;
+  /** Naoqi joints names */
+  std::vector <std::string> qi_joints_;
 
-  /** current joints angles */
-  std::vector <double> joint_angles_;
+  /** Naoqi joints angles to apply */
+  std::vector <double> qi_commands_;
 
-  /** joints velocities from ROS hardware interface */
-  std::vector <double> joint_velocities_;
+  /** hardware interface joints names */
+  std::vector <std::string> hw_joints_;
 
-  /** joints efforts from ROS hardware interface */
-  std::vector <double> joint_efforts_;
+  /** hardware interface joints angles to apply */
+  std::vector <double> hw_commands_;
+
+  /** hardware interface current joints angles */
+  std::vector <double> hw_angles_;
+
+  /** hardware interface joints velocities */
+  std::vector <double> hw_velocities_;
+
+  /** hardware interface joints efforts*/
+  std::vector <double> hw_efforts_;
 
   /** enable using DCM instead of ALMotion */
   bool use_dcm_;

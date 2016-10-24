@@ -76,31 +76,33 @@ void Robot::stopService() {
   }
 }
 
-bool Robot::initializeControllers(const std::vector <std::string> &joints_names)
+bool Robot::initializeControllers(const std::vector <std::string> &joints)
 {
-  int joints_nbr = joints_names.size();
+  int joints_nbr = joints.size();
 
   // Initialize Controllers' Interfaces
-  joint_angles_.reserve(joints_nbr);
-  joint_velocities_.reserve(joints_nbr);
-  joint_efforts_.reserve(joints_nbr);
-  joint_commands_.reserve(joints_nbr);
+  hw_angles_.reserve(joints_nbr);
+  hw_velocities_.reserve(joints_nbr);
+  hw_efforts_.reserve(joints_nbr);
+  hw_commands_.reserve(joints_nbr);
 
-  joint_angles_.resize(joints_nbr);
-  joint_velocities_.resize(joints_nbr);
-  joint_efforts_.resize(joints_nbr);
-  joint_commands_.resize(joints_nbr);
+  hw_angles_.resize(joints_nbr);
+  hw_velocities_.resize(joints_nbr);
+  hw_efforts_.resize(joints_nbr);
+  hw_commands_.resize(joints_nbr);
 
   try
   {
     for(int i=0; i<joints_nbr; ++i)
     {
-      hardware_interface::JointStateHandle state_handle(joints_names.at(i), &joint_angles_[i],
-                                                        &joint_velocities_[i], &joint_efforts_[i]);
+      hardware_interface::JointStateHandle state_handle(joints.at(i),
+                                                        &hw_angles_[i],
+                                                        &hw_velocities_[i],
+                                                        &hw_efforts_[i]);
       jnt_state_interface_.registerHandle(state_handle);
 
-      hardware_interface::JointHandle pos_handle(jnt_state_interface_.getHandle(joints_names.at(i)),
-                                                 &joint_commands_[i]);
+      hardware_interface::JointHandle pos_handle(jnt_state_interface_.getHandle(joints.at(i)),
+                                                 &hw_commands_[i]);
       jnt_pos_interface_.registerHandle(pos_handle);
     }
 
@@ -123,7 +125,8 @@ bool Robot::connect()
   is_connected_ = false;
 
   // Load ROS Parameters
-  loadParams();
+  if (!loadParams())
+    return false;
 
   // Initialize DCM Wrapper
   if (use_dcm_)
@@ -157,20 +160,33 @@ bool Robot::connect()
   if (use_dcm_)
     motion_->manageConcurrence();
 
-  //read joints names that will be controlled
-  std::vector <std::string> joints_names = motion_->getBodyNamesFromGroup(motor_groups_);
-  ignoreMimicJoints(&joints_names);
-  ROS_INFO_STREAM("The following joints are controlled: " << print(joints_names));
+  //read Naoqi joints names that will be controlled
+  qi_joints_ = motion_->getBodyNamesFromGroup(motor_groups_);
+  if (qi_joints_.empty())
+    ROS_ERROR("Controlled joints are not known.");
+  //define HW joints if empty
+  if (hw_joints_.empty())
+  {
+    ROS_INFO_STREAM("Initializing the HW controlled joints with Naoqi joints.");
+    hw_joints_.reserve(qi_joints_.size());
+    copy(qi_joints_.begin(), qi_joints_.end(), back_inserter(hw_joints_));
+  }
+  ROS_INFO_STREAM("HW controlled joints are : " << print(hw_joints_));
+
+  ignoreMimicJoints(&qi_joints_);
+  ROS_INFO_STREAM("Naoqi controlled joints are : " << print(qi_joints_));
+  qi_commands_.reserve(qi_joints_.size());
+  qi_commands_.resize(qi_joints_.size(), 0.0);
 
   //initialise Memory, Motion, and DCM classes with controlled joints
-  memory_->init(joints_names);
-  motion_->init(joints_names);
+  memory_->init(qi_joints_);
+  motion_->init(qi_joints_);
   if (use_dcm_)
-    dcm_->init(joints_names);
+    dcm_->init(qi_joints_);
 
   //read joints names to initialize the joint_states topic
   joint_states_topic_.header.frame_id = "base_link";
-  joint_states_topic_.name = motion_->getBodyNames("Body"); //should be Body=JointActuators+Wheels
+  joint_states_topic_.name = motion_->getBodyNames("Body"); //Body=JointActuators+Wheels
   joint_states_topic_.position.resize(joint_states_topic_.name.size());
 
   //read joints names to initialize the diagnostics
@@ -198,7 +214,7 @@ bool Robot::connect()
     return false;
   }
 
-  if(!initializeControllers(joints_names))
+  if(!initializeControllers(hw_joints_))
     return false;
 
   ROS_INFO_STREAM(session_name_ << " module initialized!");
@@ -218,7 +234,7 @@ void Robot::subscribe()
   joint_states_pub_ = nhPtr_->advertise<sensor_msgs::JointState>("/joint_states", topic_queue_);
 }
 
-void Robot::loadParams()
+bool Robot::loadParams()
 {
   ros::NodeHandle nh("~");
   // Load Server Parameters
@@ -230,10 +246,12 @@ void Robot::loadParams()
   nh.getParam("OdomFrame", odom_frame_);
   nh.getParam("use_dcm", use_dcm_);
   if (use_dcm_)
-    ROS_WARN_STREAM("Please, be carefull! You have chosen to control the robot based on DCM. "
-                    << "This leads to concurrence between DCM and ALMotion and "
-                    << "it can cause shaking the robot. If it starts shaking, stop the node, "
-                    << "for example by pressing Ctrl+C");
+    ROS_WARN_STREAM("Please, be carefull! "
+                    << "You have chosen to control the robot based on DCM. "
+                    << "It leads to concurrence between DCM and ALMotion, and "
+                    << "it can cause shaking the robot. "
+                    << "If the robot starts shaking, stop the node (Ctrl+C). "
+                    << "Use either ALMotion or stop ALMotion and use DCM only.");
 
   //set the prefix for topics
   nh.getParam("Prefix", prefix_);
@@ -241,18 +259,36 @@ void Robot::loadParams()
     if (prefix_.at(prefix_.length()-1) != '/')
       prefix_ += "/";
 
-  //set the motors groups to control
-  std::string tmp="";
-  nh.getParam("motor_groups", tmp);
-  boost::split (motor_groups_, tmp, boost::is_any_of(" "));
-  if (motor_groups_.size() == 1)
-    if (motor_groups_[0].empty())
-      motor_groups_.clear();
-  if (motor_groups_.size() == 0)
+  //read HW controllers names
+  //FIXME: read them from controller launch file
+  std::string controllers_temp = "";
+  nh.getParam("controllers", controllers_temp);
+  std::vector <std::string> controllers = toVector(controllers_temp);
+  if (controllers.empty())
+  {
+    controllers.push_back(prefix_+"LeftArm_controller");
+    controllers.push_back(prefix_+"LeftHand_controller");
+    controllers.push_back(prefix_+"RightArm_controller");
+    controllers.push_back(prefix_+"RightHand_controller");
+  }
+  //define controllers joints
+  XmlRpc::XmlRpcValue topicList;
+  for (int i=0; i<controllers.size(); ++i)
+  {
+    nh.getParam(controllers[i]+"/joints", topicList);
+    xmlToVector(topicList, &hw_joints_);
+  }
+
+  //define the motors groups to control
+  std::string motor_groups_temp = "";
+  nh.getParam("motor_groups", motor_groups_temp);
+  motor_groups_ = toVector(motor_groups_temp);
+  if (motor_groups_.empty())
   {
     motor_groups_.push_back("LArm");
     motor_groups_.push_back("RArm");
   }
+  return true;
 }
 
 void Robot::run()
@@ -362,18 +398,33 @@ void Robot::publishBaseFootprint(const ros::Time &ts)
 
 void Robot::readJoints()
 {
-  //read memory keys
-  std::vector<float> joint_positions = memory_->getListData();
+  //read memory keys for joint/position/sensor
+  std::vector<float> qi_joints_positions = memory_->getListData();
 
   //store joints angles
-  std::vector <double>::iterator it_command = joint_commands_.begin();
-  std::vector <double>::iterator it_now = joint_angles_.begin();
-  std::vector <float>::iterator it_sensor = joint_positions.begin();
-  for(; it_command<joint_commands_.end(); ++it_command, ++it_now, ++it_sensor)
+  std::vector<std::string>::iterator hw_j = hw_joints_.begin();
+  std::vector<double>::iterator it_command = hw_commands_.begin();
+  std::vector<double>::iterator it_now = hw_angles_.begin();
+  std::vector<float>::iterator it_sensor = qi_joints_positions.begin();
+  std::vector<std::string>::iterator qi_j = qi_joints_.begin();
+  for(; it_command != hw_commands_.end(); ++it_command, ++it_now, ++hw_j)
   {
+    if (*hw_j != *qi_j)
+    {
+      *it_now = 0.0;
+      *it_command = 0.0;
+      continue;
+    }
+
+    //ROS_INFO_STREAM(*hw_j);
+
     *it_now = *it_sensor;
     // Set commands to the read angles for when no command specified
     *it_command = *it_sensor;
+
+    //increment qi iterators
+    ++qi_j;
+    ++it_sensor;
   }
 }
 
@@ -391,10 +442,20 @@ void Robot::writeJoints()
 {
   // Check if there is some change in joints values
   bool changed(false);
-  std::vector<double>::iterator it_now = joint_angles_.begin();
-  std::vector<double>::iterator it_command = joint_commands_.begin();
-  for(int i=0; it_command != joint_commands_.end(); ++i, ++it_command, ++it_now)
+  std::vector<std::string>::iterator qi_j = qi_joints_.begin();
+  std::vector<std::string>::iterator hw_j = hw_joints_.begin();
+  std::vector<double>::iterator it_now = hw_angles_.begin();
+  std::vector<double>::iterator it_command = hw_commands_.begin();
+  std::vector<double>::iterator it_qi_command = qi_commands_.begin();
+  for(int i=0; it_command != hw_commands_.end(); ++i, ++it_command, ++it_now, ++hw_j)
   {
+    if (*hw_j == *qi_j)
+    {
+      *it_qi_command = *it_command;
+      ++qi_j;
+      ++it_qi_command;
+    }
+
     double diff = fabs(*it_command - *it_now);
     if(diff > joint_precision_)
     {
@@ -409,9 +470,9 @@ void Robot::writeJoints()
     return;
 
   if (use_dcm_)
-    dcm_->writeJoints(joint_commands_);
+    dcm_->writeJoints(qi_commands_);
   else
-    motion_->writeJoints(joint_commands_);
+    motion_->writeJoints(qi_commands_);
 }
 
 void Robot::ignoreMimicJoints(std::vector <std::string> *joints)
