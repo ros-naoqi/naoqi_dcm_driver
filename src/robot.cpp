@@ -291,7 +291,8 @@ void Robot::controllerLoop()
 
     writeJoints();
 
-    publishJointStateFromAlMotion();
+    //no need if Naoqi Driver is running
+    //publishJointStateFromAlMotion();
 
     rate.sleep();
   }
