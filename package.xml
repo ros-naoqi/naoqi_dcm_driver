@@ -13,8 +13,8 @@
 
   <license>BSD</license>
 
-  <url type="repository">https://github.com/ros-aldebaran/naoqi_dcm_driver</url>
-  <url type="bugtracker">https://github.com/ros-aldebaran/naoqi_dcm_driver/issues</url>
+  <url type="repository">https://github.com/ros-naoqi/naoqi_dcm_driver</url>
+  <url type="bugtracker">https://github.com/ros-naoqi/naoqi_dcm_driver/issues</url>
   <buildtool_depend>catkin</buildtool_depend>
 
   <build_depend>roscpp</build_depend>
