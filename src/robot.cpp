@@ -19,6 +19,8 @@
 
 #include <diagnostic_msgs/DiagnosticArray.h>
 
+#include <XmlRpcValue.h>
+
 #include "naoqi_dcm_driver/robot.hpp"
 #include "naoqi_dcm_driver/tools.hpp"
 
@@ -260,23 +262,28 @@ bool Robot::loadParams()
       prefix_ += "/";
 
   //read HW controllers names
-  //FIXME: read them from controller launch file
-  std::string controllers_temp = "";
-  nh.getParam("controllers", controllers_temp);
-  std::vector <std::string> controllers = toVector(controllers_temp);
-  if (controllers.empty())
+  XmlRpc::XmlRpcValue params_pepper_dcm;
+  nh.getParam("pepper_dcm", params_pepper_dcm);
+  if (params_pepper_dcm.getType() != XmlRpc::XmlRpcValue::TypeStruct)
+    ROS_ERROR("Please ensure that the list of controllers is TypeStruct");
+
+  XmlRpc::XmlRpcValue::ValueStruct::const_iterator it=params_pepper_dcm.begin();
+  for (; it != params_pepper_dcm.end(); ++it)
   {
-    controllers.push_back(prefix_+"LeftArm_controller");
-    controllers.push_back(prefix_+"LeftHand_controller");
-    controllers.push_back(prefix_+"RightArm_controller");
-    controllers.push_back(prefix_+"RightHand_controller");
-  }
-  //define controllers joints
-  XmlRpc::XmlRpcValue topicList;
-  for (int i=0; i<controllers.size(); ++i)
-  {
-    nh.getParam(controllers[i]+"/joints", topicList);
-    xmlToVector(topicList, &hw_joints_);
+    XmlRpc::XmlRpcValue::ValueStruct::const_iterator it2 = params_pepper_dcm[it->first].begin();
+    for (; it2 != params_pepper_dcm[it->first].end(); ++it2)
+    {
+      std::string param = (std::string)(it2->first);
+      if (param.compare("joints") == 0)
+      {
+        XmlRpc::XmlRpcValue params_joints = params_pepper_dcm[it->first][it2->first];
+        if (params_joints.getType() == XmlRpc::XmlRpcValue::TypeArray)
+        {
+          xmlToVector(params_joints, &hw_joints_);
+          continue;
+        }
+      }
+    }
   }
 
   //define the motors groups to control
