@@ -67,6 +67,9 @@ private:
   /** joints names */
   std::vector <std::string> joints_all_names_;
 
+  /** joints electric current */
+  std::vector <float> joints_current_;
+
   /** all the keys to check. It is a concatenation of
    * temperatures_keys, stiffness_keys, current_keys */
   std::vector <std::string> keys_tocheck_;

@@ -27,10 +27,14 @@ Diagnostics::Diagnostics(const qi::SessionPtr& session,
     pub_(pub),
     joints_all_names_(joints_all_names),
     temperature_warn_level_(68.0f),
-    temperature_error_level_(70.0f)
+    temperature_error_level_(73.0f)
 {
+  //resize the joint current vector
+  joints_current_.reserve(joints_all_names_.size());
+  joints_current_.resize(joints_all_names_.size());
+
   //set the default status
-  status_.name = std::string("naoqi_dcm_driver_joints:Status");
+  status_.name = std::string("naoqi_dcm_driver:Status");
   status_.hardware_id = "robot";
   status_.level = diagnostic_msgs::DiagnosticStatus::OK;
   status_.message = "OK";
@@ -46,6 +50,8 @@ Diagnostics::Diagnostics(const qi::SessionPtr& session,
   }
 
   //set the keys to check
+  keys_tocheck_.push_back("Device/SubDeviceList/Battery/Charge/Sensor/Value");
+
   std::vector<std::string>::const_iterator it = joints_all_names_.begin();
   for(; it != joints_all_names_.end(); ++it) {
     keys_tocheck_.push_back("Device/SubDeviceList/" + *it + "/Temperature/Sensor/Value");
@@ -117,22 +123,44 @@ bool Diagnostics::publish()
     return false;
   }
 
+  //check the battery charge level
   size_t val = 0;
+  float batteryCharge = static_cast<float>(values[val++]);
+
+  diagnostic_updater::DiagnosticStatusWrapper status_battery;
+  status_battery.name = std::string("naoqi_dcm_driver:Battery");
+  status_battery.hardware_id = "battery";
+  status_battery.add("BatteryCharge", batteryCharge);
+
+  //TODO check if it is charging
+  if (batteryCharge > 5.0f)
+  {
+    status_battery.level = diagnostic_msgs::DiagnosticStatus::OK;
+    status_battery.message = "OK";
+  }
+  else
+  {
+    status_battery.level = diagnostic_msgs::DiagnosticStatus::ERROR;
+    status_battery.message = "LOW Battery Charge";
+  }
+  msg.status.push_back(status_battery);
+
   std::vector<std::string>::iterator it_name = joints_all_names_.begin();
-  for(; it_name != joints_all_names_.end(); ++it_name)
+  std::vector<float>::iterator it_current = joints_current_.begin();
+  for(; it_name != joints_all_names_.end(); ++it_name, ++it_current)
   {
     diagnostic_updater::DiagnosticStatusWrapper status;
-    status.name = std::string("naoqi_dcm_driver_joints") + *it_name;
+    status.name = std::string("naoqi_dcm_driver:") + *it_name;
 
     float temperature = static_cast<float>(values[val++]);
     float stiffness = static_cast<float>(values[val++]);
-    float current = static_cast<float>(values[val++]);
+    *it_current = static_cast<float>(values[val++]);
 
     // Fill the status data
     status.hardware_id = *it_name;
     status.add("Temperature", temperature);
     status.add("Stiffness", stiffness);
-    status.add("ElectricCurrent", current);
+    status.add("ElectricCurrent", *it_current);
 
     // Define the level
     if (temperature < temperature_warn_level_)
@@ -161,8 +189,8 @@ bool Diagnostics::publish()
     minStiffness = std::min(minStiffness, stiffness);
     if((*it_name).find("Hand") == std::string::npos)
       minStiffnessWoHands = std::min(minStiffnessWoHands, stiffness);
-    maxCurrent = std::max(maxCurrent, current);
-    minCurrent = std::min(minCurrent, current);
+    maxCurrent = std::max(maxCurrent, *it_current);
+    minCurrent = std::min(minCurrent, *it_current);
     if(status.level >= (int) diagnostic_msgs::DiagnosticStatus::WARN) {
       hotJointsSS << std::endl << *it_name << ": " << temperature << "°C";
     }
@@ -170,7 +198,7 @@ bool Diagnostics::publish()
 
   // Get the aggregated joints status
   diagnostic_updater::DiagnosticStatusWrapper status;
-  status.name = std::string("naoqi_dcm_driver_joints:Status");
+  status.name = std::string("naoqi_dcm_driver:Status");
   status.hardware_id = "joints";
   status.level = max_level;
   setMessageFromStatus(status);
@@ -184,6 +212,11 @@ bool Diagnostics::publish()
   status.add("Hot Joints", hotJointsSS.str());
 
   msg.status.push_back(status);
+
+  std::vector<std::string>::const_iterator it_cntrl = joints_all_names_.begin();
+  for(; it_cntrl != joints_all_names_.end(); ++it_cntrl)
+    keys_tocheck_.push_back("Device/SubDeviceList/" + *it_cntrl + "/ElectricCurrent/Sensor/Value");
+
 
   pub_->publish(msg);
 
