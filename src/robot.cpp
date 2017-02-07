@@ -410,28 +410,23 @@ void Robot::readJoints()
 
   //store joints angles
   std::vector<std::string>::iterator hw_j = hw_joints_.begin();
-  std::vector<double>::iterator it_command = hw_commands_.begin();
-  std::vector<double>::iterator it_now = hw_angles_.begin();
-  std::vector<float>::iterator it_sensor = qi_joints_positions.begin();
+  std::vector<double>::iterator hw_command_j = hw_commands_.begin();
+  std::vector<double>::iterator hw_angle_j = hw_angles_.begin();
+  std::vector<float>::iterator qi_position_j = qi_joints_positions.begin();
   std::vector<std::string>::iterator qi_j = qi_joints_.begin();
-  for(; it_command != hw_commands_.end(); ++it_command, ++it_now, ++hw_j)
+
+  for(; hw_command_j != hw_commands_.end(); ++hw_command_j, ++hw_angle_j, ++hw_j)
   {
     if (*hw_j != *qi_j)
-    {
-      *it_now = 0.0;
-      *it_command = 0.0;
       continue;
-    }
 
-    //ROS_INFO_STREAM(*hw_j);
-
-    *it_now = *it_sensor;
+    *hw_angle_j = *qi_position_j;
     // Set commands to the read angles for when no command specified
-    *it_command = *it_sensor;
+    *hw_command_j = *qi_position_j;
 
     //increment qi iterators
     ++qi_j;
-    ++it_sensor;
+    ++qi_position_j;
   }
 }
 
