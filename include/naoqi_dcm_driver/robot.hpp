@@ -218,6 +218,9 @@ private:
 
   /** enable using DCM instead of ALMotion */
   bool use_dcm_;
+
+  /** stiffness value to apply */
+  float stiffness_value_;
 };
 
 #endif // NAOQI_DCM_DRIVER_H

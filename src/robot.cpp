@@ -41,7 +41,8 @@ Robot::Robot(qi::SessionPtr session):
                controller_freq_(15.0),
                joint_precision_(0.1),
                odom_frame_("odom"),
-               use_dcm_(false)
+               use_dcm_(false),
+               stiffness_value_(0.9f)
 {
 }
 
@@ -58,7 +59,7 @@ void Robot::stopService() {
     /* reset stiffness for arms if using DCM
      * to prevent its concurrence with ALMotion */
     if(use_dcm_)
-      motion_->setStiffnessArms(0.0f, 1.0f);
+      motion_->setStiffnessArms(0.0f, 2.0f);
 
     //going to rest
     if (motor_groups_.size() == 1)
@@ -202,7 +203,7 @@ bool Robot::connect()
   subscribe();
 
   // Turn Stiffness On
-  if (!setStiffness(1.0f))
+  if (!setStiffness(stiffness_value_))
     return false;
 
   // Initialize Controller Manager and Controllers
@@ -247,6 +248,10 @@ bool Robot::loadParams()
   nh.getParam("JointPrecision", joint_precision_);
   nh.getParam("OdomFrame", odom_frame_);
   nh.getParam("use_dcm", use_dcm_);
+
+  if (nh.hasParam("max_stiffness"))
+    nh.getParam("max_stiffness", stiffness_value_);
+
   if (use_dcm_)
     ROS_WARN_STREAM("Please, be carefull! "
                     << "You have chosen to control the robot based on DCM. "
@@ -321,6 +326,8 @@ void Robot::controllerLoop()
 
     if (!diagnostics_->publish())
       stopService();
+
+    //motion_->stiffnessInterpolation(diagnostics_->getForcedJoints(), 0.3f, 2.0f);
 
     try
     {
