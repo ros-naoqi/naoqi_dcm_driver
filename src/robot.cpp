@@ -67,7 +67,8 @@ void Robot::stopService() {
         motion_->rest();
 
     //set stiffness for the whole body
-    setStiffness(0.0f);
+    //setStiffness(0.0f);
+    motion_->setStiffnessArms(0.0f, 2.0f);
   }
 
   is_connected_ = false;
