@@ -59,6 +59,10 @@ Diagnostics::Diagnostics(const qi::SessionPtr& session,
     keys_tocheck_.push_back("Device/SubDeviceList/" + *it + "/ElectricCurrent/Sensor/Value");
   }
 
+  std::vector<std::string>::const_iterator it_cntrl = joints_all_names_.begin();
+  for(; it_cntrl != joints_all_names_.end(); ++it_cntrl)
+    keys_tocheck_.push_back("Device/SubDeviceList/" + *it_cntrl + "/ElectricCurrent/Sensor/Value");
+
   //allow the temperature reporting (for CPU)
   try
   {
@@ -212,11 +216,6 @@ bool Diagnostics::publish()
   status.add("Hot Joints", hotJointsSS.str());
 
   msg.status.push_back(status);
-
-  std::vector<std::string>::const_iterator it_cntrl = joints_all_names_.begin();
-  for(; it_cntrl != joints_all_names_.end(); ++it_cntrl)
-    keys_tocheck_.push_back("Device/SubDeviceList/" + *it_cntrl + "/ElectricCurrent/Sensor/Value");
-
 
   pub_->publish(msg);
 
