@@ -8,14 +8,15 @@ When calling DCM commands, you can achieve faster control frequency but it can m
 What it does
 ============
 
-The package communicates with NAOqi to enable a robot control with ROS through the following packages (please follow the links to get for following installation and launch instructions):
+The package allows to control a robot from ROS, while communicating with Naoqi. 
+The package is inspired by nao_dcm_driver, however it does not require NAOqi SDK anymore and rather based on naoqi_libqi and naoqi_libqicore. The package is more generic, and it works with any of Nao, Romeo, and Pepper robots. It can run on a remote PC or locally on a robot (after compiling on OpenNAO VM, deploying to your robot, and using robot_ip:=127.0.0.1).
+
+== How to use ==
+
+The package should be used via the following wrapper-packages depending on your robot (please, follow the links to get instructions on installation and usage):
 
 * `nao_dcm_bringup <http://wiki.ros.org/nao_dcm_bringup>`_
 
 * `romeo_dcm_bringup <http://wiki.ros.org/romeo_dcm_bringup>`_
 
 * `pepper_dcm_bringup <http://wiki.ros.org/pepper_dcm_bringup>`_
-
-The package naoqi_dcm_driver is inspired by nao_dcm_driver, however it does not require NAOqi SDK anymore and rather based on naoqi_libqi and naoqi_libqicore.
-The package is more generic and it works with any of Nao, Romeo, and Pepper robots. 
-It can be runned on a remote PC or locally on a robot (after compiling on OpenNAO, and exporting NAO_IP=127.0.0.1 before launching a corresponding dcm_bringup package).
