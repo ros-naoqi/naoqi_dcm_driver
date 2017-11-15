@@ -3,7 +3,7 @@ NAOqi DCM Driver
 
 The hardware interface to connect to Nao, Romeo, and Pepper robots. This is the new version of `nao_dcm_driver <https://github.com/ros-naoqi/nao_dcm_robot/tree/master/nao_dcm_driver>`_ that is now common for all robots.
 You can control the robot either by calling DCM commands, or using ALMotion (by default). 
-When calling DCM commands, you can achieve faster control frequecy but it can make the robot shaking because of the concurrence between DCM and ALMotion. Especially when using DCM, please be careful and use it at your own risks.
+When calling DCM commands, you can achieve faster control frequency but it can make the robot shaking because of the concurrence between DCM and ALMotion. Especially when using DCM, please be careful and use it at your own risks.
 
 What it does
 ============
