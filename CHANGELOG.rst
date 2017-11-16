@@ -2,8 +2,8 @@
 Changelog for package naoqi_dcm_driver
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.0.3 (2017-11-16)
+------------------
 * Update README
 * Update README
 * Fix typo in README
