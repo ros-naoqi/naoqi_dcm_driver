@@ -490,7 +490,6 @@ void Robot::writeJoints()
     {
       //ROS_INFO_STREAM(" joint " << i << " : diff=" << diff);
       changed = true;
-      break;
     }
   }
 
