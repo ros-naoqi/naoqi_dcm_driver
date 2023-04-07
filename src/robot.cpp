@@ -447,14 +447,16 @@ void Robot::readJoints()
   //store joints angles
   std::vector<double>::iterator hw_command_j = hw_commands_.begin();
   std::vector<double>::iterator hw_angle_j = hw_angles_.begin();
+  std::vector<double>::iterator hw_velocity_j = hw_velocities_.begin();
   std::vector<float>::iterator qi_position_j = qi_joints_positions.begin();
   std::vector<bool>::iterator hw_enabled_j = hw_enabled_.begin();
 
-  for(; hw_command_j != hw_commands_.end(); ++hw_command_j, ++hw_angle_j, ++hw_enabled_j)
+  for(; hw_command_j != hw_commands_.end(); ++hw_command_j, ++hw_angle_j, ++hw_enabled_j, ++hw_velocity_j)
   {
     if (!*hw_enabled_j)
       continue;
 
+    *hw_velocity_j = (*qi_position_j - *hw_angle_j)*controller_freq_;
     *hw_angle_j = *qi_position_j;
     // Set commands to the read angles for when no command specified
     *hw_command_j = *qi_position_j;
