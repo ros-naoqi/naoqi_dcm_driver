@@ -234,8 +234,6 @@ bool Motion::stiffnessInterpolation(const std::string &motor_group,
     return false;
   }
 
-  ROS_INFO_STREAM("Stiffness is updated to " << stiffness << " for " << motor_group);
-
   return true;
 }
 

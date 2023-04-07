@@ -198,6 +198,9 @@ private:
   /** joints positions from ROS hardware interface */
   hardware_interface::PositionJointInterface jnt_pos_interface_;
 
+  /** joints efforts from ROS hardware interface */ // Mainly to set stiffness
+  hardware_interface::EffortJointInterface jnt_eff_interface_;
+
   /** Naoqi joints names */
   std::vector <std::string> qi_joints_;
 
