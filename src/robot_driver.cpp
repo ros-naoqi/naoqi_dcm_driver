@@ -16,8 +16,13 @@
 */
 
 // NAOqi Headers
+#include <boost/function.hpp>
 #include <qi/application.hpp>
+#include <qi/signalspy.hpp>
 
+#if LIBQI_VERSION>=29
+#include "driver_authenticator.hpp"
+#endif
 #include "naoqi_dcm_driver/robot.hpp"
 
 static std::string getROSIP(std::string network_interface)
@@ -70,24 +75,43 @@ int main(int argc, char** argv)
   }
 
   // Load Params from Parameter Server
-  int pport = 9559;
+  int pport = 9503;
   std::string pip = "127.0.0.1";
   std::string roscore_ip = "127.0.0.1";
   std::string network_interface = "eth0";
+  std::string username;
+  std::string password;
   nh.getParam("RobotIP", pip);
   nh.getParam("RobotPort", pport);
   nh.getParam("DriverBrokerIP", roscore_ip);
   nh.getParam("network_interface", network_interface);
+  nh.getParam("username", username);
+  nh.getParam("password", password);
   setMasterURINet( "http://"+roscore_ip+":11311", network_interface);
 
   //create a session
   qi::SessionPtr session = qi::makeSession();
+  qi::SignalSpy connectedSpy(session->connected);
+
+  std::string protocol = "tcp://";
+#if LIBQI_VERSION>=29
+    protocol = "tcps://";
+    naoqi::DriverAuthenticatorFactory *factory = new naoqi::DriverAuthenticatorFactory;
+    factory->user = username;
+    factory->pass = password;
+    session->setClientAuthenticatorFactory(qi::ClientAuthenticatorFactoryPtr(factory));
+#else
+    std::cout << BOLDRED 
+              << "No need to set a password" 
+              << RESETCOLOR
+              << std::endl;
+#endif
+  qi::Url url(protocol + pip + ":" + std::to_string(pport));
+
   try
   {
-    std::stringstream strstr;
-    strstr << "tcp://" << pip << ":" << pport;
-    ROS_INFO_STREAM("Connecting to " << pip << ":" << pport);
-    session->connect(strstr.str()).wait();
+    ROS_INFO_STREAM("Connecting to " << url);
+    session->connect(url).value();
   }
   catch(const std::exception &e)
   {
@@ -96,9 +120,9 @@ int main(int argc, char** argv)
     return -1;
   }
 
-  if (!session->connected)
+  if (!connectedSpy.waitUntil(1, qi::MilliSeconds(500)))
   {
-    ROS_ERROR("Cannot connect to session");
+    ROS_ERROR("Session connected but connection signal was not received");
     session->close();
     return -1;
   }

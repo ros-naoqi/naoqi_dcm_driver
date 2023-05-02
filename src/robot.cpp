@@ -255,7 +255,7 @@ bool Robot::loadParams()
     nh.getParam("max_stiffness", stiffness_value_);
 
   if (use_dcm_)
-    ROS_WARN_STREAM("Please, be carefull! "
+    ROS_WARN_STREAM("Please, be careful! "
                     << "You have chosen to control the robot based on DCM. "
                     << "It leads to concurrence between DCM and ALMotion, and "
                     << "it can cause shaking the robot. "
@@ -301,6 +301,8 @@ bool Robot::loadParams()
   {
     motor_groups_.push_back("LArm");
     motor_groups_.push_back("RArm");
+    motor_groups_.push_back("Head");
+    motor_groups_.push_back("Leg");
   }
   return true;
 }
