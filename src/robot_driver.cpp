@@ -20,9 +20,7 @@
 #include <qi/application.hpp>
 #include <qi/signalspy.hpp>
 
-#if LIBQI_VERSION>=29
 #include "driver_authenticator.hpp"
-#endif
 #include "naoqi_dcm_driver/robot.hpp"
 
 static std::string getROSIP(std::string network_interface)
@@ -94,18 +92,20 @@ int main(int argc, char** argv)
   qi::SignalSpy connectedSpy(session->connected);
 
   std::string protocol = "tcp://";
-#if LIBQI_VERSION>=29
+  bool secure_connection = (pport == 9503 && !username.empty() && !password.empty());
+  if (secure_connection) 
+  {
     protocol = "tcps://";
     naoqi::DriverAuthenticatorFactory *factory = new naoqi::DriverAuthenticatorFactory;
     factory->user = username;
     factory->pass = password;
     session->setClientAuthenticatorFactory(qi::ClientAuthenticatorFactoryPtr(factory));
-#else
-    std::cout << BOLDRED 
-              << "No need to set a password" 
-              << RESETCOLOR
-              << std::endl;
-#endif
+    std::cout << "Secure connection configured" << std::endl;
+  }
+  else
+  {
+    std::cout << "Your connection is not secure" << std::endl;
+  }
   qi::Url url(protocol + pip + ":" + std::to_string(pport));
 
   try
@@ -120,7 +120,7 @@ int main(int argc, char** argv)
     return -1;
   }
 
-  if (!connectedSpy.waitUntil(1, qi::MilliSeconds(500)))
+  if (!connectedSpy.waitUntil(1, qi::MilliSeconds(500)).value())
   {
     ROS_ERROR("Session connected but connection signal was not received");
     session->close();
@@ -133,7 +133,7 @@ int main(int argc, char** argv)
   // stop ALTouch service to prevent the robot shaking
   try
   {
-    qi::AnyObject touch_proxy = session->service("ALTouch");
+    qi::AnyObject touch_proxy = session->service("ALTouch").value();
     touch_proxy.call<void>("exit");
     ROS_INFO_STREAM("Naoqi Touch service is shut down");
   }
@@ -145,7 +145,7 @@ int main(int argc, char** argv)
   // stop AutonomousLife service to prevent the robot shaking
   try
   {
-    qi::AnyObject life_proxy = session->service("ALAutonomousLife");
+    qi::AnyObject life_proxy = session->service("ALAutonomousLife").value();
     if (life_proxy.call<std::string>("getState") != "disabled")
     {
       life_proxy.call<void>("setState", "disabled");
