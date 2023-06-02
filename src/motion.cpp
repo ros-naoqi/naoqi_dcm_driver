@@ -26,7 +26,7 @@ Motion::Motion(const qi::SessionPtr& session)
 {
   try
   {
-    motion_proxy_ = session->service("ALMotion");
+    motion_proxy_ = session->service("ALMotion").value();
   }
   catch (const std::exception& e)
   {

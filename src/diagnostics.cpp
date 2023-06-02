@@ -42,7 +42,7 @@ Diagnostics::Diagnostics(const qi::SessionPtr& session,
   //connect to Memmory proxy
   try
   {
-    memory_proxy_ = session->service("ALMemory");
+    memory_proxy_ = session->service("ALMemory").value();
   }
   catch (const std::exception& e)
   {
@@ -67,7 +67,7 @@ Diagnostics::Diagnostics(const qi::SessionPtr& session,
   try
   {
     if ((robot == "pepper") || (robot == "juliette") || (robot == "nao")) {
-      qi::AnyObject body_temperature_ = session->service("ALBodyTemperature");
+      qi::AnyObject body_temperature_ = session->service("ALBodyTemperature").value();
       body_temperature_.call<void>("setEnableNotifications", true);
     }
   }
