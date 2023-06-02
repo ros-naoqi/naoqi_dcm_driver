@@ -20,7 +20,15 @@ To run, the driver requires the `naoqi_libqi`, `naoqi_libqicore` and `naoqi_brid
 Additionaly, you might need to install further dependencies with this command : apt install ros-noetic-gazebo-plugins ros-noetic-gazebo-ros ros-noetic-gazebo-ros-control ros-noetic-ros-control ros-noetic-ros-controllers python-rospkg python-yaml
 
 ##Reperitory 
-You need to clone the following reperitorys: pepper_robot,pepper_dcm_robot,pepper_virtual,naoqi_bridge,humanoid_msgs,camera_info_manager_py  and build them in the same workspace. 
+You need to clone the following reperitorys ==  
+pepper_robot: https://github.com/linoxmo/pepper_robot.git
+pepper_dcm_robot: https://github.com/linoxmo/pepper_dcm_robot.git
+pepper_virtual: https://github.com/linoxmo/pepper_virtual.git
+naoqi_bridge: https://github.com/linoxmo/naoqi_bridge.git
+humanoid_msgs , camera_info_manager_py 
+
+
+and build them in the same workspace. 
 
 ## Launch
 The driver can be launched using the following command:
