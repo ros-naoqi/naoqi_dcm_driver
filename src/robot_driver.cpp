@@ -85,7 +85,7 @@ int main(int argc, char **argv)
   nh.getParam("RobotPort", pport);
   nh.getParam("DriverBrokerIP", roscore_ip);
   nh.getParam("network_interface", network_interface);
-  nh.getParam("username", username);
+  nh.getParam("user", username);
   nh.getParam("password", password);
   setMasterURINet("http://" + roscore_ip + ":11311", network_interface);
 
