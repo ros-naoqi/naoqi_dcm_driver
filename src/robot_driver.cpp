@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
-*/
+ */
 
 // NAOqi Headers
 #include <boost/function.hpp>
@@ -28,11 +28,13 @@ static std::string getROSIP(std::string network_interface)
   if (network_interface.empty())
     network_interface = "eth0";
 
-  typedef std::map< std::string, std::vector<std::string> > Map_IP;
+  typedef std::map<std::string, std::vector<std::string>> Map_IP;
   Map_IP map_ip = static_cast<Map_IP>(qi::os::hostIPAddrs());
-  if ( map_ip.find(network_interface) == map_ip.end() ) {
+  if (map_ip.find(network_interface) == map_ip.end())
+  {
     std::cerr << "Could not find network interface named " << network_interface << ", possible interfaces are ... ";
-    for (Map_IP::iterator it=map_ip.begin(); it!=map_ip.end(); ++it) std::cerr << it->first <<  " ";
+    for (Map_IP::iterator it = map_ip.begin(); it != map_ip.end(); ++it)
+      std::cerr << it->first << " ";
     std::cerr << std::endl;
     exit(1);
   }
@@ -41,32 +43,32 @@ static std::string getROSIP(std::string network_interface)
   return ip;
 }
 
-static void setMasterURINet( const std::string& uri, const std::string& network_interface )
+static void setMasterURINet(const std::string &uri, const std::string &network_interface)
 {
   setenv("ROS_MASTER_URI", uri.c_str(), 1);
 
-  std::string my_master = "__master="+uri;
-  std::map< std::string, std::string > remap;
+  std::string my_master = "__master=" + uri;
+  std::map<std::string, std::string> remap;
   remap["__master"] = uri;
   remap["__ip"] = getROSIP(network_interface);
   // init ros without a sigint-handler in order to shutdown correctly by naoqi
-  const char* ns_env = std::getenv("ROS_NAMESPACE");
+  const char *ns_env = std::getenv("ROS_NAMESPACE");
 
-  ros::init( remap, (ns_env==NULL)?(std::string("naoqi_dcm_driver")):("") , ros::init_options::NoSigintHandler );
+  ros::init(remap, (ns_env == NULL) ? (std::string("naoqi_dcm_driver")) : (""), ros::init_options::NoSigintHandler);
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
   // Need this to for SOAP serialization of floats to work
   setlocale(LC_NUMERIC, "C");
 
-  //start a session
+  // start a session
   qi::Application app(argc, argv);
 
   ros::init(argc, argv, "naoqi_dcm_driver");
 
   ros::NodeHandle nh("~");
-  if(!ros::master::check())
+  if (!ros::master::check())
   {
     ROS_ERROR("Could not contact master!\nQuitting... ");
     return -1;
@@ -85,7 +87,7 @@ int main(int argc, char** argv)
   nh.getParam("network_interface", network_interface);
   nh.getParam("username", username);
   nh.getParam("password", password);
-  setMasterURINet( "http://"+roscore_ip+":11311", network_interface);
+  setMasterURINet("http://" + roscore_ip + ":11311", network_interface);
 
   //create a session
   qi::SessionPtr session = qi::makeSession();
@@ -93,6 +95,7 @@ int main(int argc, char** argv)
 
   std::string protocol = "tcp://";
   bool secure_connection = (pport == 9503 && !username.empty() && !password.empty());
+
   if (secure_connection) 
   {
     protocol = "tcps://";
@@ -106,6 +109,7 @@ int main(int argc, char** argv)
   {
     std::cout << "Your connection is not secure" << std::endl;
   }
+
   qi::Url url(protocol + pip + ":" + std::to_string(pport));
 
   try
@@ -113,7 +117,7 @@ int main(int argc, char** argv)
     ROS_INFO_STREAM("Connecting to " << url);
     session->connect(url).value();
   }
-  catch(const std::exception &e)
+  catch (const std::exception &e)
   {
     ROS_ERROR("Cannot connect to session, %s", e.what());
     session->close();
@@ -137,7 +141,7 @@ int main(int argc, char** argv)
     touch_proxy.call<void>("exit");
     ROS_INFO_STREAM("Naoqi Touch service is shut down");
   }
-  catch (const std::exception& e)
+  catch (const std::exception &e)
   {
     ROS_DEBUG("Did not stop ALTouch: %s", e.what());
   }
@@ -153,7 +157,7 @@ int main(int argc, char** argv)
       ros::Duration(2.0).sleep();
     }
   }
-  catch (const std::exception& e)
+  catch (const std::exception &e)
   {
     ROS_DEBUG("Did not stop AutonomousLife: %s", e.what());
   }
@@ -174,10 +178,10 @@ int main(int argc, char** argv)
   // Run the main Loop
   robot->run();
 
-  //release stiffness and stop correctly
+  // release stiffness and stop correctly
   robot->stopService();
 
-  //close the session
+  // close the session
   session->close();
   spinner.stop();
 
