@@ -75,32 +75,39 @@ int main(int argc, char **argv)
   }
 
   // Load Params from Parameter Server
-  int pport = 9503;
   std::string pip = "127.0.0.1";
+  int pport = 0;
   std::string roscore_ip = "127.0.0.1";
   std::string network_interface = "eth0";
-  std::string username;
+  std::string user;
   std::string password;
   nh.getParam("RobotIP", pip);
   nh.getParam("RobotPort", pport);
   nh.getParam("DriverBrokerIP", roscore_ip);
   nh.getParam("network_interface", network_interface);
-  nh.getParam("user", username);
+  nh.getParam("user", user);
   nh.getParam("password", password);
   setMasterURINet("http://" + roscore_ip + ":11311", network_interface);
+  if (pport == 0) {
+    if (!user.empty() || !password.empty()) {
+      pport = 9503;
+    } else {
+      pport = 9559;
+    }
+  }
 
   //create a session
   qi::SessionPtr session = qi::makeSession();
   qi::SignalSpy connectedSpy(session->connected);
 
   std::string protocol = "tcp://";
-  bool secure_connection = (pport == 9503 && !username.empty() && !password.empty());
+  bool secure_connection = (pport == 9503 && !user.empty() && !password.empty());
 
-  if (secure_connection) 
+  if (secure_connection)
   {
     protocol = "tcps://";
     naoqi::DriverAuthenticatorFactory *factory = new naoqi::DriverAuthenticatorFactory;
-    factory->user = username;
+    factory->user = user;
     factory->pass = password;
     session->setClientAuthenticatorFactory(qi::ClientAuthenticatorFactoryPtr(factory));
     std::cout << "Secure connection configured" << std::endl;

@@ -27,7 +27,7 @@ DCM::DCM(const qi::SessionPtr& session,
 {
   try
   {
-    dcm_proxy_ = session->service("DCM");
+    dcm_proxy_ = session->service("DCM").value();
   }
   catch (const std::exception& e)
   {
