@@ -17,7 +17,8 @@
 
 // ROS Headers
 #include <ros/ros.h>
-
+#include <ros/console.h>
+#include <qi/jsoncodec.hpp>
 #include "naoqi_dcm_driver/motion.hpp"
 #include "naoqi_dcm_driver/tools.hpp"
 
@@ -25,7 +26,7 @@ Motion::Motion(const qi::SessionPtr& session)
 {
   try
   {
-    motion_proxy_ = session->service("ALMotion");
+    motion_proxy_ = session->service("ALMotion").value();
   }
   catch (const std::exception& e)
   {
@@ -200,18 +201,27 @@ std::vector<double> Motion::getAngles(const std::string &robot_part)
 void Motion::writeJoints(const std::vector <double> &joint_commands)
 {
   //prepare the list of joints
-  qi::AnyValue names_qi = fromStringVectorToAnyValue(joints_names_);
+  qi::AnyValue names_qi = qi::AnyValue::from(joints_names_);
 
   //prepare the list of joint angles
-  qi::AnyValue angles_qi = fromDoubleVectorToAnyValue(joint_commands);
+  qi::AnyValue angles_qi = qi::AnyValue::from(joint_commands);
 
   try
   {
-    motion_proxy_.async<void>("setAngles", names_qi, angles_qi, 0.2f);
+    // std::stringstream ss;
+    // ss << "Calling ALMotion.setAngles " << names_qi.toString() << " " << angles_qi.toString() << " 0.2";
+    // std::cout << ss.str() << std::endl;
+    auto settingAngles = motion_proxy_.async<void>("setAngles", names_qi, angles_qi, 0.2f);
+    settingAngles.then([](qi::Future<void> f) {
+      if (f.hasError())
+      {
+        ROS_ERROR("Motion: error setting joint angles.n\tTrace: %s", f.error().c_str());
+      }
+    });
   }
   catch(const std::exception& e)
   {
-    ROS_ERROR("Motion: Failed to set joints nagles! \n\tTrace: %s", e.what());
+    ROS_ERROR("Motion: error requesting new joint angles.\n\tTrace: %s", e.what());
   }
 }
 

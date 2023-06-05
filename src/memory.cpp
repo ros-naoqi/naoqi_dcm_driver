@@ -25,7 +25,7 @@ Memory::Memory(const qi::SessionPtr& session)
 {
   try
   {
-    memory_proxy_ = session->service("ALMemory");
+    memory_proxy_ = session->service("ALMemory").value();
   }
   catch (const std::exception& e)
   {
