@@ -108,10 +108,15 @@ bool Robot::initializeControllers(const std::vector <std::string> &joints)
       hardware_interface::JointHandle pos_handle(jnt_state_interface_.getHandle(joints.at(i)),
                                                  &hw_commands_[i]);
       jnt_pos_interface_.registerHandle(pos_handle);
+      hw_efforts_[i] = stiffness_value_;
+      hardware_interface::JointHandle eff_handle(jnt_state_interface_.getHandle(joints.at(i)),
+                                                 &hw_efforts_[i]);
+      jnt_eff_interface_.registerHandle(eff_handle);
     }
 
     registerInterface(&jnt_state_interface_);
     registerInterface(&jnt_pos_interface_);
+    registerInterface(&jnt_eff_interface_);
   }
   catch(const ros::Exception& e)
   {
@@ -330,7 +335,7 @@ void Robot::controllerLoop()
     readJoints();
 
     //motion_->stiffnessInterpolation(diagnostics_->getForcedJoints(), 0.3f, 2.0f);
-
+  
     try
     {
       manager_->update(time, ros::Duration(1.0f/controller_freq_));
@@ -344,8 +349,8 @@ void Robot::controllerLoop()
     writeJoints();
 
     //no need if Naoqi Driver is running
-    //publishJointStateFromAlMotion();
-
+    publishJointStateFromAlMotion();
+    
     rate.sleep();
   }
   ROS_INFO_STREAM("Shutting down the main loop");
@@ -442,14 +447,16 @@ void Robot::readJoints()
   //store joints angles
   std::vector<double>::iterator hw_command_j = hw_commands_.begin();
   std::vector<double>::iterator hw_angle_j = hw_angles_.begin();
+  std::vector<double>::iterator hw_velocity_j = hw_velocities_.begin();
   std::vector<float>::iterator qi_position_j = qi_joints_positions.begin();
   std::vector<bool>::iterator hw_enabled_j = hw_enabled_.begin();
 
-  for(; hw_command_j != hw_commands_.end(); ++hw_command_j, ++hw_angle_j, ++hw_enabled_j)
+  for(; hw_command_j != hw_commands_.end(); ++hw_command_j, ++hw_angle_j, ++hw_enabled_j, ++hw_velocity_j)
   {
     if (!*hw_enabled_j)
       continue;
 
+    *hw_velocity_j = (*qi_position_j - *hw_angle_j)*controller_freq_;
     *hw_angle_j = *qi_position_j;
     // Set commands to the read angles for when no command specified
     *hw_command_j = *qi_position_j;
@@ -461,11 +468,7 @@ void Robot::readJoints()
 
 void Robot::publishJointStateFromAlMotion(){
   joint_states_topic_.header.stamp = ros::Time::now();
-
-  std::vector<double> position_data = motion_->getAngles("Body");
-  for(int i = 0; i<position_data.size(); ++i)
-    joint_states_topic_.position[i] = position_data[i];
-
+  joint_states_topic_.position = motion_->getAngles("Body");
   joint_states_pub_.publish(joint_states_topic_);
 }
 
@@ -473,6 +476,7 @@ void Robot::writeJoints()
 {
   // Check if there is some change in joints values
   bool changed(false);
+  motion_->stiffnessInterpolation(motor_groups_, (hw_efforts_[0]>1?1:hw_efforts_[0]), 0.001f);
   std::vector<double>::iterator hw_angle_j = hw_angles_.begin();
   std::vector<double>::iterator hw_command_j = hw_commands_.begin();
   std::vector<double>::iterator qi_command_j = qi_commands_.begin();
@@ -492,7 +496,7 @@ void Robot::writeJoints()
       changed = true;
     }
   }
-
+  
   // Update joints values if there are some changes
   if(!changed)
     return;

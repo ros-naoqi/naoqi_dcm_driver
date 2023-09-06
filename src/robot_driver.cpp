@@ -96,7 +96,7 @@ int main(int argc, char** argv)
     return -1;
   }
 
-  if (!session->connected)
+  if (!session->isConnected())
   {
     ROS_ERROR("Cannot connect to session");
     session->close();
